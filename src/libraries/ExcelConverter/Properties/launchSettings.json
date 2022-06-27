@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "ExcelConverter": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "TURN_OFF_STYLECOP_DEBUG": "'Debug-True'"
+      }
+    }
+  }
+}
