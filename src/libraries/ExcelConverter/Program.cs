@@ -63,7 +63,7 @@ namespace Excel2AppEngine
         public string Value;
     }
 
-    static class ExcelParser
+    static public class ExcelParser
     {
         public static ParsedExcelData parseSpreadsheet(String excelFilePath, bool outputFile = true)
         {

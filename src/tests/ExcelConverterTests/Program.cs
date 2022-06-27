@@ -37,9 +37,44 @@ namespace ExcelConverterTests
         [Fact]
         public void SheetSumConvertTests()
         {
-         
-            
+            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
+            var data = Excel2AppEngine.ExcelParser.parseSpreadsheet("TestSheet.xlsx", false);
+            var engine = new Engine(new PowerFxConfig());
+            var recalc = new RecalcEngine();
+
+            foreach (ParsedCell c in data.Cells)
+            {
+                if (c == null) continue;
+
+                if (c.Formula != null)
+                {
+                    // Node Kinds: call, unary, binary, table, record, etc
+                    // Console.WriteLine("Cell {0} with value {1} and formula {2} and kind {3}", c.CellId, c.Value, c.Formula, res.Root.Kind);
+                    ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
+
+                    if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
+                    {
+                        Console.WriteLine(c.Formula);
+                        conv.ProcessFunc((CallNode)p.Root);
+                    }
+                    else
+                    {
+
+                    }
+                }
+                else
+                {
+                    ParseResult p = engine.Parse(c.Value); // parse not just if formula, that way we can recognize string/numlit
+                    if (p.Root.Kind == NodeKind.NumLit) // if the cell equals a numerical value
+                    {
+                        conv.CreateVariable(c.SheetName, c.CellId, (NumLitNode)p.Root);
+                    }
+                }
+            }
         }
+
+
+    }
 
         [Fact]
         public void CasingConvertTests()
