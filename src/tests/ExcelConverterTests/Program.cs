@@ -4,6 +4,7 @@
 using System;
 using System.Globalization;
 using DocumentFormat.OpenXml.Spreadsheet;
+using DocumentFormat.OpenXml.Wordprocessing;
 using Excel2AppEngine;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Core;
@@ -99,10 +100,43 @@ namespace ExcelConverterTests
         public void SheetReadTests()
         {
             var data = Excel2AppEngine.ExcelParser.ParseSpreadsheet("TestSheet.xlsx", false);
+            HashSet<String> set = new HashSet<string>();
             foreach (ParsedCell c in data.Cells)
             {
+                if (c == null || c.SheetName != "SheetReadTest") continue;
 
+                if (c.Formula != null)
+                {
+                    set.Add(c.Formula);
+                }
+                else
+                {
+                    set.Add(c.Value);
+                }
             }
+
+            Assert.Contains("Literal Nums", set);
+            Assert.Contains("Arithmetic", set);
+            Assert.Contains("Formulas", set);
+
+            Assert.Contains("-183", set);
+            Assert.Contains("0", set);
+            Assert.Contains("1", set);
+            Assert.Contains("1337", set);
+
+            Assert.Contains("5+3", set);
+            Assert.Contains("10-3", set);
+            Assert.Contains("10*0", set);
+            Assert.Contains("40/20", set);
+
+            Assert.Contains("SUM(1,2,3)", set);
+            Assert.Contains("SIN(1)", set);
+            Assert.Contains("ATAN(-1)", set);
+            Assert.Contains("AND(1=1, 0=0)", set);
+
+            Assert.DoesNotContain("i say right foot creep", set);
+            Assert.DoesNotContain("I do the same thing I told you that I never would", set);
+            Assert.DoesNotContain("SUM(1, 2)", set);
             // add to a Set and check if each value is in the set
         }
 
