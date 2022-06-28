@@ -65,7 +65,7 @@ namespace Excel2AppEngine
 
     static public class ExcelParser
     {
-        public static ParsedExcelData parseSpreadsheet(String excelFilePath, bool outputFile = true)
+        public static ParsedExcelData ParseSpreadsheet(String excelFilePath, bool outputFile = true)
         {
             TestCellId();
             TestSharedFormulaResolve();
@@ -424,7 +424,7 @@ namespace Excel2AppEngine
         {
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
 
-            ParsedExcelData data = ExcelParser.parseSpreadsheet(@"CrawlWalkRun.xlsx"); // parse Excel spreadsheet and extract data
+            ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"CrawlWalkRun.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
 
@@ -513,7 +513,7 @@ namespace Excel2AppEngine
         // Processes and converts a function to PowerFX equivalent, taking in a call node
         // DOES NOT CHECK IF OUTPUT IS A VALID POWERFX function
         // WIP - will support nested functions later
-        public void ProcessFunc(CallNode node)
+        public String ProcessFunc(CallNode node)
         {
             // add second project as unit test?
             // node = SUM(1, 2+2, 3)
@@ -559,9 +559,14 @@ namespace Excel2AppEngine
                 }
 
             }
-            Console.WriteLine(adjustedFuncName);
 
-            //  for (TexlNode arg in funcArgs.ChildNodes)
+            return adjustedFuncName;
+            //Console.WriteLine(adjustedFuncName);
+
+            // SUM(1, 2) [node]
+            // Sum(1, 2) [string]
+
+            //    for (TexlNode arg in funcArgs.ChildNodes)
             //    {
             //        adjustedFuncName += arg.ToString();
             //    }
@@ -600,7 +605,24 @@ namespace Excel2AppEngine
             }
             */
         }
+        public String ProcessFunc(String formula, Engine engine) // overload for ProcessFunc that wraps around and takes String input and engine
+        {
+            ParseResult p = engine.Parse(formula); // parse to get type and information using the passed in engine object
+            if (p.Root.Kind != NodeKind.Call) return ""; // if not actually a function, return
+            CallNode node = (CallNode)p.Root;
+            return ProcessFunc(node);
+
+        }
+
+        public String ProcessFunc(String formula, ParseResult parse) // overload for ProcessFunc that wraps around and takes String input and parseresult
+        {
+            if (parse.Root.Kind != NodeKind.Call) return ""; // if not actually a function, return
+            CallNode node = (CallNode)parse.Root;
+            return ProcessFunc(node);
+        }
     }
+
+  
 
     class ConsoleRepl
     {

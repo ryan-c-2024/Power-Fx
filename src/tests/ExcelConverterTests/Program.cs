@@ -3,6 +3,8 @@
 
 using System;
 using System.Globalization;
+using DocumentFormat.OpenXml.Spreadsheet;
+using Excel2AppEngine;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Core;
 using Microsoft.PowerFx.Core.Functions;
@@ -10,6 +12,7 @@ using Microsoft.PowerFx.Core.Tests;
 using Microsoft.PowerFx.Core.Texl;
 using Microsoft.PowerFx.Core.Types.Enums;
 using Microsoft.PowerFx.Core.Utils;
+using Microsoft.PowerFx.Syntax;
 using Microsoft.PowerFx.Types;
 using Xunit;
 using Xunit.Sdk;
@@ -35,46 +38,75 @@ namespace ExcelConverterTests
         }
 
         [Fact]
-        public void SheetSumConvertTests()
+        public void BasicFuncConvertTests()
         {
             Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
-            var data = Excel2AppEngine.ExcelParser.parseSpreadsheet("TestSheet.xlsx", false);
-            var engine = new Engine(new PowerFxConfig());
             var recalc = new RecalcEngine();
+            var engine = new Engine(new PowerFxConfig());
 
+            var pfxValue = recalc.Eval(conv.ProcessFunc("ABS(-123)", engine));
+            Assert.Equal("123", pfxValue.ToObject().ToString());
+
+            pfxValue = recalc.Eval(conv.ProcessFunc("ACOS(-1)", engine));
+            decimal roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
+            Assert.Equal("3.14", roundedDecimal.ToString());
+
+            pfxValue = recalc.Eval(conv.ProcessFunc("ACOT(-1)", engine));
+            roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
+            Assert.Equal("2.36", roundedDecimal.ToString());
+
+            pfxValue = recalc.Eval(conv.ProcessFunc("AND(1=1, 0=0)", engine));
+            Assert.Equal("True", pfxValue.ToObject().ToString());
+
+            pfxValue = recalc.Eval(conv.ProcessFunc("ASIN(-1)", engine));
+            roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
+            Assert.Equal("-1.57", roundedDecimal.ToString());
+
+            pfxValue = recalc.Eval(conv.ProcessFunc("ATAN(-1)", engine));
+            roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
+            Assert.Equal("-0.79", roundedDecimal.ToString());
+
+            pfxValue = recalc.Eval(conv.ProcessFunc("ATAN2(1, -1)", engine));
+            roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
+            Assert.Equal("-0.79", roundedDecimal.ToString());
+        }
+
+        [Fact]
+        public void NestedFuncConvertTests()
+        {
+            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
+            var recalc = new RecalcEngine();
+            var engine = new Engine(new PowerFxConfig());
+
+            var pfxValue = recalc.Eval(conv.ProcessFunc("DAY(DATE(2022, 6, 13))", engine));
+            Assert.Equal("13", pfxValue.ToObject().ToString());
+            pfxValue = recalc.Eval(conv.ProcessFunc("YEAR(DATE(2022,6,13))", engine));
+            Assert.Equal("2022", pfxValue.ToObject().ToString());
+
+        }
+
+        [Fact]
+        public void RangeFuncConvertTests()
+        {
+            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
+            var recalc = new RecalcEngine();
+            var engine = new Engine(new PowerFxConfig());
+
+        }
+        
+
+        [Fact]
+        public void SheetReadTests()
+        {
+            var data = Excel2AppEngine.ExcelParser.ParseSpreadsheet("TestSheet.xlsx", false);
             foreach (ParsedCell c in data.Cells)
             {
-                if (c == null) continue;
 
-                if (c.Formula != null)
-                {
-                    // Node Kinds: call, unary, binary, table, record, etc
-                    // Console.WriteLine("Cell {0} with value {1} and formula {2} and kind {3}", c.CellId, c.Value, c.Formula, res.Root.Kind);
-                    ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
-
-                    if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
-                    {
-                        Console.WriteLine(c.Formula);
-                        conv.ProcessFunc((CallNode)p.Root);
-                    }
-                    else
-                    {
-
-                    }
-                }
-                else
-                {
-                    ParseResult p = engine.Parse(c.Value); // parse not just if formula, that way we can recognize string/numlit
-                    if (p.Root.Kind == NodeKind.NumLit) // if the cell equals a numerical value
-                    {
-                        conv.CreateVariable(c.SheetName, c.CellId, (NumLitNode)p.Root);
-                    }
-                }
             }
+            // add to a Set and check if each value is in the set
         }
 
 
-    }
 
         [Fact]
         public void CasingConvertTests()
@@ -86,8 +118,12 @@ namespace ExcelConverterTests
             Assert.Equal("Sum", convertedFunc);
             convertedFunc = conv.AdjustFuncName("ABS");
             Assert.Equal("Abs", convertedFunc);
+            convertedFunc = conv.AdjustFuncName("RADIANS");
+            Assert.Equal("Radians", convertedFunc);
+            convertedFunc = conv.AdjustFuncName("SIN");
+            Assert.Equal("Sin", convertedFunc);
             convertedFunc = conv.AdjustFuncName("");
-            Assert.Equal("123", convertedFunc);
+            Assert.Equal("", convertedFunc);
             convertedFunc = conv.AdjustFuncName("SUPERCALIFRAGILISTICEXPIALIDOCIOUS");
             Assert.Equal("Supercalifragilisticexpialidocious", convertedFunc);
         }
