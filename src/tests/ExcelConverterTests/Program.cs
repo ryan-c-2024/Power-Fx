@@ -35,7 +35,14 @@ namespace ExcelConverterTests
         [Fact]
         public void GenerateNameTests()
         {
-           
+            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
+
+            Assert.Equal("", conv.GenerateGenericName("", ""));
+            Assert.Equal("Sheet1_A1", conv.GenerateGenericName("Sheet1", "A1"));
+            Assert.Equal("TestSheet_E10", conv.GenerateGenericName("TestSheet", "E10"));
+            Assert.Equal("Balances_B5", conv.GenerateGenericName("Balances", "B5"));
+            Assert.Equal("Sheet1380_F4", conv.GenerateGenericName("Sheet1380", "F4"));
+
         }
 
         [Fact]

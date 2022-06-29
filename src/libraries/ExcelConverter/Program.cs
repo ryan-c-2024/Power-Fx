@@ -21,10 +21,11 @@ using Microsoft.PowerFx.Types;
 using Microsoft.PowerFx.Preview;
 using Microsoft.PowerFx.Interpreter;
 using Newtonsoft.Json;
+using DocumentFormat.OpenXml.Office2010.PowerPoint;
 
 namespace Excel2AppEngine
 {
-    
+
     [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
     public class ParsedExcelData
     {
@@ -418,13 +419,13 @@ namespace Excel2AppEngine
 
     public class Converter
     {
-       // public Converter() { } // do we have to do this to access constructor from outside this file????
+        // public Converter() { } // do we have to do this to access constructor from outside this file????
 
         public static void Main(string[] args)
         {
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
 
-            ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"CrawlWalkRun.xlsx"); // parse Excel spreadsheet and extract data
+            ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
 
@@ -476,15 +477,16 @@ namespace Excel2AppEngine
 
         private void CreateVariable(String sheetName, String cellNum, NumLitNode node)
         {
-            String genericName = GenerateGenericName(sheetName, cellNum, node);
+            String genericName = GenerateGenericName(sheetName, cellNum);
             Console.WriteLine(genericName + " = " + node.ActualNumValue);
         }
 
         // Takes sheet name and cell number and creates a generic default PowerFX variable name for it
         // Eg. Cell B2 on Sheet1 -> Sheet1_B2
         // QUESTION: Should we keep the first letter of the variable uppercase at all times? lowercase? or base it on sheet name casing
-        public String GenerateGenericName(String sheetName, String cellNum, NumLitNode node)
+        public String GenerateGenericName(String sheetName, String cellNum)
         {
+            if (sheetName == null || sheetName == "" || cellNum == null || cellNum == "") return "";
             String output = sheetName + "_" + cellNum;
             return output;
         }
@@ -621,171 +623,7 @@ namespace Excel2AppEngine
             return ProcessFunc(node);
         }
     }
-
-  
-
-    class ConsoleRepl
-    {
-        private static RecalcEngine engine;
-
-        static void ResetEngine()
-        {
-            var config = new PowerFxConfig();
-
-            engine = new RecalcEngine(config);
-        }
-
-        public static void run()
-        {
-            ResetEngine();
-
-            var version = typeof(RecalcEngine).Assembly.GetName().Version.ToString();
-            Console.WriteLine($"Microsoft Power Fx Console Formula REPL, Version {version}");
-            Console.WriteLine($"Enter Excel formulas.  Use \"Help()\" for details.");
-
-            // loop
-            while (true)
-            {
-                // read
-                Console.Write("\n> ");
-                var expr = Console.ReadLine();
-
-                try
-                {
-                    Match match;
-
-                    // variable assignment: Set( <ident>, <expr> )
-                    if ((match = Regex.Match(expr, @"^\s*Set\(\s*(?<ident>\w+)\s*,\s*(?<expr>.*)\)\s*$")).Success)
-                    {
-                        var r = engine.Eval(match.Groups["expr"].Value);
-                        Console.WriteLine(match.Groups["ident"].Value + ": " + PrintResult(r));
-                        engine.UpdateVariable(match.Groups["ident"].Value, r);
-                    }
-
-                    // formula definition: <ident> = <formula>
-                    else if ((match = Regex.Match(expr, @"^\s*(?<ident>\w+)\s*=(?<formula>.*)$")).Success)
-                        engine.SetFormula(match.Groups["ident"].Value, match.Groups["formula"].Value, OnUpdate);
-
-                    // eval and print everything else, unless empty lines and single line comment (which do nothing)
-                    else if (!Regex.IsMatch(expr, @"^\s*//") && Regex.IsMatch(expr, @"[^\s]"))
-                    {
-                        var result = engine.Eval(expr);
-
-                        if (result is ErrorValue errorValue)
-                            throw new Exception("Error: " + errorValue.Errors[0].Message);
-                        else
-                            Console.WriteLine(PrintResult(result));
-                    }
-                }
-                catch (Exception e)
-                {
-                    Console.ForegroundColor = ConsoleColor.Red;
-                    Console.WriteLine(e.Message);
-                    Console.ResetColor();
-                }
-            }
-        }
-
-        static void OnUpdate(string name, FormulaValue newValue)
-        {
-            Console.Write($"{name}: ");
-            if (newValue is ErrorValue errorValue)
-            {
-                Console.ForegroundColor = ConsoleColor.Red;
-                Console.WriteLine("Error: " + errorValue.Errors[0].Message);
-                Console.ResetColor();
-            }
-            else
-                Console.WriteLine(PrintResult(newValue));
-        }
-
-        static string PrintResult(object value)
-        {
-            string resultString = "";
-
-            if (value is BlankValue)
-                resultString = "Blank()";
-            else if (value is RecordValue record)
-            {
-                var separator = "";
-                resultString = "{";
-                foreach (var field in record.Fields)
-                {
-                    resultString += separator + $"{field.Name}:";
-                    resultString += PrintResult(field.Value);
-                    separator = ", ";
-                }
-                resultString += "}";
-            }
-            else if (value is TableValue table)
-            {
-                int valueSeen = 0, recordsSeen = 0;
-                string separator = "";
-
-                // check if the table can be represented in simpler [ ] notation,
-                //   where each element is a record with a field named Value.
-                foreach (var row in table.Rows)
-                {
-                    recordsSeen++;
-                    if (row.Value is RecordValue scanRecord)
-                    {
-                        foreach (var field in scanRecord.Fields)
-                            if (field.Name == "Value")
-                            {
-                                valueSeen++;
-                                resultString += separator + PrintResult(field.Value);
-                                separator = ", ";
-                            }
-                            else
-                                valueSeen = 0;
-                    }
-                    else
-                        valueSeen = 0;
-                }
-
-                if (valueSeen == recordsSeen)
-                    return ("[" + resultString + "]");
-                else
-                {
-                    // no, table is more complex that a single column of Value fields,
-                    //   requires full treatment
-                    resultString = "Table(";
-                    separator = "";
-                    foreach (var row in table.Rows)
-                    {
-                        resultString += separator + PrintResult(row.Value);
-                        separator = ", ";
-                    }
-                    resultString += ")";
-                }
-            }
-            else if (value is ErrorValue errorValue)
-                resultString = "<Error: " + errorValue.Errors[0].Message + ">";
-            else if (value is StringValue str)
-                resultString = "\"" + str.ToObject().ToString().Replace("\"", "\"\"") + "\"";
-            else if (value is FormulaValue fv)
-                resultString = fv.ToObject().ToString();
-            else
-                throw new Exception("unexpected type in PrintResult");
-
-            return (resultString);
-        }
-
-        private class ResetFunction : ReflectionFunction
-        {
-            public ResetFunction() : base("Reset", FormulaType.Boolean) { }
-
-            public BooleanValue Execute()
-            {
-                ResetEngine();
-                return FormulaValue.New(true);
-            }
-        }
-    }
-
 }
-
-
 
 /*
               // Below code written by Ryan for testing purposes
