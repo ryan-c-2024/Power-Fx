@@ -433,16 +433,18 @@ namespace Excel2AppEngine
             {
                 if (c == null) continue;
 
+
                 if (c.Formula != null)
                 {
+                    //Console.WriteLine("value: " + c.Value + " Formula: " + c.Formula);
+
                     // Node Kinds: call, unary, binary, table, record, etc
                     // Console.WriteLine("Cell {0} with value {1} and formula {2} and kind {3}", c.CellId, c.Value, c.Formula, res.Root.Kind);
                     ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
 
                     if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
                     {
-                        Console.WriteLine(c.Formula);
-                        conv.ProcessFunc((CallNode)p.Root);
+                        Console.WriteLine(conv.ProcessFunc((CallNode)p.Root));
                     }
                     else
                     {
@@ -540,6 +542,8 @@ namespace Excel2AppEngine
             // a1:a3 -> Range(A1, A3) (design new RangeNode object)
 
             // debug parsing of A1+A2 and figure out how parsing works behind the scenes
+
+
 
             ListNode funcArgs = node.Args;
             var funcName = node.Head.Name;
