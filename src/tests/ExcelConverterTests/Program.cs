@@ -91,7 +91,12 @@ namespace ExcelConverterTests
             Assert.Equal("13", pfxValue.ToObject().ToString());
             pfxValue = recalc.Eval(conv.ProcessFunc("YEAR(DATE(2022,6,13))", engine));
             Assert.Equal("2022", pfxValue.ToObject().ToString());
-
+            pfxValue = recalc.Eval(conv.ProcessFunc("SUM(1,SUM(1,2))", engine));
+            Assert.Equal("4", pfxValue.ToObject().ToString());
+            pfxValue = recalc.Eval(conv.ProcessFunc("SUM(SUM(1,2), 1)", engine));
+            Assert.Equal("4", pfxValue.ToObject().ToString());
+            pfxValue = recalc.Eval(conv.ProcessFunc("SUM(1,SUM(SUM(SUM(4,6),SUM(5,9)),2))", engine));
+            Assert.Equal("27", pfxValue.ToObject().ToString());
         }
 
         [Fact]
