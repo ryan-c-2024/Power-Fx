@@ -25,14 +25,40 @@ namespace Excel2AppEngine
 
     public class ParsedCellAnalyzer : TexlVisitor
     {
-        //private string transformed;
+        private string transformedOutput;
+        private ParsedCell cell;
 
-        private ParsedCellAnalyzer()
+        public ParsedCellAnalyzer()
         {
-            //transformed = "";
+            transformedOutput = "";
+            cell = null;
         }
 
-        public static string Analyze(string formula)
+        public static string Analyze(TexlNode node, ParsedCell c)
+        {
+            var analyzer = new ParsedCellAnalyzer();
+            analyzer.cell = c;
+            //Console.WriteLine("Current node: {0}", node.ToString());
+            switch (node.Kind)
+            {
+                case NodeKind.NumLit:
+                    // how can we do this? we need ParsedCell object to get sheet name and cell ID
+                    //GenerateGenericName()
+                    node.Accept(analyzer);
+                    break;
+                case NodeKind.BinaryOp:
+                    break;
+                case NodeKind.Call:
+                    node.Accept(analyzer);
+                    break;
+                default:
+                    break;
+            }
+
+            return analyzer.GetConvertedOutput(); // return converted String (have to use this function bc Analyze is static)
+        }
+
+        private static string Analyze(string formula)
         {
             var engine = new Engine(new PowerFxConfig());
             var parseResult = engine.Parse(formula);
@@ -41,41 +67,97 @@ namespace Excel2AppEngine
 
         private static string Analyze(TexlNode node)
         {
+            // ACCEPT AND VISIT ALL RETURN VOID SO DATA TO RETURNED SOME OTHER WAY
+
             var retVal = "";
             var analyzer = new ParsedCellAnalyzer();
             Console.WriteLine("Current node: {0}", node.ToString());
             switch (node.Kind)
             {
-                case NodeKind.Call:
-                    var callNode = (CallNode)node;
-
-                    // process function
-                    Console.WriteLine("CallNode: {0}", callNode.ToString());
-                    
-                    // analyze child nodes
-                    foreach (var argNode in callNode.Args.ChildNodes)
-                    {
-                        argNode.Accept(analyzer);
-                    }
-
+                case NodeKind.NumLit:
+                    // how can we do this? we need ParsedCell object to get sheet name and cell ID
+                    //GenerateGenericName()
+                    node.Accept(analyzer);
                     break;
-                case NodeKind.FirstName:
-                    // generic variables and defined name variables
-                    var firstNameNode = (FirstNameNode)node;
-                    Console.WriteLine("FirstNameNode: {0}", firstNameNode.Ident.Name);
+                case NodeKind.BinaryOp:
+                    break;
+                case NodeKind.Call:
+                    node.Accept(analyzer);
+                    //Converter.ProcessFunc((CallNode)node, c);
                     break;
                 default:
-                    node.Accept(analyzer);
-                    Console.WriteLine("Node: {0}", node.ToString());
                     break;
             }
 
             return retVal;
         }
 
+        public String GetConvertedOutput() // wrapper function that returns transformed output string
+        {
+            return transformedOutput;
+        }
+
         public override bool PreVisit(CallNode node)
         {
-            var retVal = Analyze(node);
+
+
+
+            /*
+               ListNode funcArgs = node.Args;
+               var funcName = node.Head.Name;
+              
+                String adjustedFuncName = Converter.AdjustFuncName(funcName.ToString()) + "("; // convert func name to PowerFX style
+            IReadOnlyList<TexlNode> children = funcArgs.ChildNodes;
+
+            TexlNode arg = children[0];
+            */
+
+            transformedOutput += Converter.ProcessFunc(node, cell);
+
+            /*
+             
+            for (int i = 0; i < children.Count; i++) // iterate over args and append them to output string
+            {
+                arg = children[i];
+                String append = "";
+
+                if (arg.Kind == NodeKind.Call) // if nested function call, we have to recurse
+                {
+                    append += Converter.ProcessFunc((CallNode)arg, cell);
+
+                    // Use processfunc or arg accept?
+                    //transformedOutput += arg.Accept(this);
+                }
+                else if (arg.Kind == NodeKind.FirstName)
+                {
+                    // assume its a cell
+                    // change cell name to generic variable and add 
+                    // append = GenerateGenericName(c.SheetName, c.CellID);
+                    // SUM(1, SUM(5,B13))
+                    // -> B13 to string 
+                    append = Converter.GenerateGenericName(cell.SheetName, arg.ToString());
+                }
+                else
+                {
+                    append = arg.ToString();
+                }
+
+                if (i == (children.Count - 1)) // if only one argument or this is the last arg, close the parentheses
+                {
+                    adjustedFuncName += append + ")"; // injects arg.ToString()
+                }
+                else if (i >= 0 && i < (children.Count - 1)) // if not the last arg, add a comma and space for the next up arg
+                {
+                    adjustedFuncName += append + ", ";
+                }
+
+            }
+             transformedOutput += adjustedFuncName;
+            */
+
+
+
+            //var retVal = Analyze(node);
 
             return false;
         }
@@ -102,6 +184,7 @@ namespace Excel2AppEngine
 
         public override void PostVisit(CallNode node)
         {
+
         }
 
         public override void PostVisit(ListNode node)
@@ -138,6 +221,7 @@ namespace Excel2AppEngine
 
         public override void Visit(NumLitNode node)
         {
+            transformedOutput = Converter.CreateVariable(cell.SheetName, cell.CellId, node);
         }
 
         public override void Visit(FirstNameNode node)

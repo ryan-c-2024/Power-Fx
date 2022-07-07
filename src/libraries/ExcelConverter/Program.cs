@@ -429,6 +429,7 @@ namespace Excel2AppEngine
             ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
+            //ParsedCellAnalyzer pc = new ParsedCellAnalyzer();
 
             foreach (ParsedCell c in data.Cells)
             {
@@ -438,8 +439,11 @@ namespace Excel2AppEngine
                 if (c.Formula != null)
                 {
                     ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
+                    var result = ParsedCellAnalyzer.Analyze(p.Root, c);
+                    Console.WriteLine(result);
 
-                    if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
+                    /*
+                      if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
                     {
                         Console.WriteLine(conv.ProcessFunc((CallNode)p.Root, c));
                     }
@@ -447,19 +451,28 @@ namespace Excel2AppEngine
                     {
 
                     }
+                    */
+
                 }
                 else
                 {
                     ParseResult p = engine.Parse(c.Value); // parse not just if formula, that way we can recognize string/numlit
-                    if (p.Root.Kind == NodeKind.NumLit) // if the cell equals a numerical value
+                    var result = ParsedCellAnalyzer.Analyze(p.Root, c);
+                    Console.WriteLine(result);
+
+                    /*
+                      if (p.Root.Kind == NodeKind.NumLit) // if the cell equals a numerical value
                     {
                         conv.CreateVariable(c.SheetName, c.CellId, (NumLitNode)p.Root);
                     }
+                    */
                 }
             }
         }
 
-        private void HandleNode(TexlNode node, ParsedCell c)
+
+        /*
+          private void HandleNode(TexlNode node, ParsedCell c)
         {
             switch (node.Kind)
             {
@@ -476,6 +489,9 @@ namespace Excel2AppEngine
                     break;
             }
         }
+        
+         */
+
 
         private String ConvertFormula(String formula)
         {
@@ -492,16 +508,16 @@ namespace Excel2AppEngine
 
         }
 
-        private void CreateVariable(String sheetName, String cellNum, NumLitNode node)
+        public static String CreateVariable(String sheetName, String cellNum, NumLitNode node)
         {
             String genericName = GenerateGenericName(sheetName, cellNum);
-            Console.WriteLine(genericName + " = " + node.ActualNumValue);
+            return genericName + " = " + node.ActualNumValue;
         }
 
         // Takes sheet name and cell number and creates a generic default PowerFX variable name for it
         // Eg. Cell B2 on Sheet1 -> Sheet1_B2
         // QUESTION: Should we keep the first letter of the variable uppercase at all times? lowercase? or base it on sheet name casing
-        public String GenerateGenericName(String sheetName, String cellNum)
+        public static String GenerateGenericName(String sheetName, String cellNum)
         {
             if (sheetName == null || sheetName == "" || cellNum == null || cellNum == "") return "";
             String output = sheetName + "_" + cellNum;
@@ -510,7 +526,7 @@ namespace Excel2AppEngine
 
         // accepts all caps Excel function, converts to PowerFX style function name
         // EG: SUM -> Sum
-        public String AdjustFuncName(String funcName)
+        public static String AdjustFuncName(String funcName)
         {
             // avoid exceptions so check the length beforehand
             // if name is empty (zero length) check first bc exceptions cause performance hit, confusion
@@ -532,7 +548,7 @@ namespace Excel2AppEngine
         // Processes and converts a function to PowerFX equivalent, taking in a call node
         // DOES NOT CHECK IF OUTPUT IS A VALID POWERFX function
         // WIP - will support nested functions later
-        public String ProcessFunc(CallNode node, ParsedCell c)
+        public static String ProcessFunc(CallNode node, ParsedCell c)
         {
             // add second project as unit test?
             // node = SUM(1, 2+2, 3)
