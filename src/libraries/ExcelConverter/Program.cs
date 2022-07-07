@@ -436,10 +436,6 @@ namespace Excel2AppEngine
 
                 if (c.Formula != null)
                 {
-                    //Console.WriteLine("value: " + c.Value + " Formula: " + c.Formula);
-
-                    // Node Kinds: call, unary, binary, table, record, etc
-                    // Console.WriteLine("Cell {0} with value {1} and formula {2} and kind {3}", c.CellId, c.Value, c.Formula, res.Root.Kind);
                     ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
 
                     if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
@@ -462,7 +458,25 @@ namespace Excel2AppEngine
             }
         }
 
-        private String convertFormula(String formula)
+        private void HandleNode(TexlNode node)
+        {
+            switch (node.Kind)
+            {
+                case NodeKind.NumLit:
+                    // how can we do this? we need ParsedCell object to get sheet name and cell ID
+                    //GenerateGenericName()
+                    break;
+                case NodeKind.BinaryOp:
+                    break;
+                case NodeKind.Call:
+                    ProcessFunc((CallNode)node);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        private String ConvertFormula(String formula)
         {
             return formula;
         }
@@ -555,13 +569,24 @@ namespace Excel2AppEngine
             for (int i = 0; i < children.Count; i++) // iterate over args and append them to output string
             {
                 arg = children[i];
+                String append = "";
+
+                if (arg.Kind == NodeKind.Call) // if nested function call, we have to recurse
+                {
+                    append += ProcessFunc((CallNode)arg);
+                }
+                else
+                {
+                    append = arg.ToString();
+                }
+
                 if (i == (children.Count - 1)) // if only one argument or this is the last arg, close the parentheses
                 {
-                    adjustedFuncName += arg.ToString() + ")"; // injects arg.ToString()
+                    adjustedFuncName += append + ")"; // injects arg.ToString()
                 }
                 else if (i >= 0 && i < (children.Count - 1)) // if not the last arg, add a comma and space for the next up arg
                 {
-                    adjustedFuncName += arg + ", ";
+                    adjustedFuncName += append + ", ";
                 }
 
             }
