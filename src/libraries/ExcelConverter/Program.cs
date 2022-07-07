@@ -22,6 +22,7 @@ using Microsoft.PowerFx.Preview;
 using Microsoft.PowerFx.Interpreter;
 using Newtonsoft.Json;
 using DocumentFormat.OpenXml.Office2010.PowerPoint;
+using DocumentFormat.OpenXml.Drawing.Charts;
 
 namespace Excel2AppEngine
 {
@@ -144,7 +145,7 @@ namespace Excel2AppEngine
 
                 if (outputFile)
                 {
-                    string json = JsonConvert.SerializeObject(output, Formatting.Indented);
+                    string json = JsonConvert.SerializeObject(output, Newtonsoft.Json.Formatting.Indented);
                     File.WriteAllText($"parsed-{fileName}.json", json);
                 }
 
@@ -440,7 +441,7 @@ namespace Excel2AppEngine
 
                     if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
                     {
-                        Console.WriteLine(conv.ProcessFunc((CallNode)p.Root));
+                        Console.WriteLine(conv.ProcessFunc((CallNode)p.Root, c));
                     }
                     else
                     {
@@ -458,7 +459,7 @@ namespace Excel2AppEngine
             }
         }
 
-        private void HandleNode(TexlNode node)
+        private void HandleNode(TexlNode node, ParsedCell c)
         {
             switch (node.Kind)
             {
@@ -469,7 +470,7 @@ namespace Excel2AppEngine
                 case NodeKind.BinaryOp:
                     break;
                 case NodeKind.Call:
-                    ProcessFunc((CallNode)node);
+                    ProcessFunc((CallNode)node, c);
                     break;
                 default:
                     break;
@@ -531,7 +532,7 @@ namespace Excel2AppEngine
         // Processes and converts a function to PowerFX equivalent, taking in a call node
         // DOES NOT CHECK IF OUTPUT IS A VALID POWERFX function
         // WIP - will support nested functions later
-        public String ProcessFunc(CallNode node)
+        public String ProcessFunc(CallNode node, ParsedCell c)
         {
             // add second project as unit test?
             // node = SUM(1, 2+2, 3)
@@ -573,7 +574,16 @@ namespace Excel2AppEngine
 
                 if (arg.Kind == NodeKind.Call) // if nested function call, we have to recurse
                 {
-                    append += ProcessFunc((CallNode)arg);
+                    append += ProcessFunc((CallNode)arg, c);
+                }
+                else if (arg.Kind == NodeKind.FirstName)
+                {
+                    // assume its a cell
+                    // change cell name to generic variable and add 
+                    // append = GenerateGenericName(c.SheetName, c.CellID);
+                    // SUM(1, SUM(5,B13))
+                    // -> B13 to string 
+                    append = GenerateGenericName(c.SheetName, arg.ToString());
                 }
                 else
                 {
@@ -592,56 +602,13 @@ namespace Excel2AppEngine
             }
 
             return adjustedFuncName;
-            //Console.WriteLine(adjustedFuncName);
-
-            // SUM(1, 2) [node]
-            // Sum(1, 2) [string]
-
-            //    for (TexlNode arg in funcArgs.ChildNodes)
-            //    {
-            //        adjustedFuncName += arg.ToString();
-            //    }
-            //    Console.WriteLine(adjustedFuncName);
-            //adjustedFuncName.
-
-            //Console.WriteLine(AdjustFuncName(funcName.ToString()));
-            //node.
-
-            /*
-            // iterates and prints out all the arguments of the function call
-            IReadOnlyList<TexlNode> children = funcArgs.ChildNodes;
-
-            for (int i = 0; i < children.Count; i++) 
-            {
-                Console.Write("arg {0} is {1} w/ kind {2} ", i, children[i], children[i].Kind);
-                if (children[i].Kind == NodeKind.Call) // node.AsFirstName
-                {
-                    CallNode subnode = (CallNode)children[i];
-                    Console.WriteLine("subargs: {0}", subnode.Args.Count);
-                }
-                else if (children[i].Kind == NodeKind.FirstName)
-                {
-                    FirstNameNode blah = (FirstNameNode)children[i];
-                    Console.WriteLine("FirstName Identifier name: {0}", blah.Ident.Name);
-                }
-                else if (children[i].Kind == NodeKind.UnaryOp)
-                {
-                    UnaryOpNode blah = (UnaryOpNode)children[i];
-                    Console.WriteLine("UnaryOpNode op: {0} kind: {1} child: {2}", blah.Op, blah.Kind, blah.Child);
-                }
-                else if (children[i].Kind == NodeKind.StrLit)
-                {
-                    StrLitNode blah = (StrLitNode)children[i];
-                }
-            }
-            */
         }
         public String ProcessFunc(String formula, Engine engine) // overload for ProcessFunc that wraps around and takes String input and engine
         {
             ParseResult p = engine.Parse(formula); // parse to get type and information using the passed in engine object
             if (p.Root.Kind != NodeKind.Call) return ""; // if not actually a function, return
             CallNode node = (CallNode)p.Root;
-            return ProcessFunc(node);
+            return ProcessFunc(node, null); // fix me
 
         }
 
@@ -649,38 +616,7 @@ namespace Excel2AppEngine
         {
             if (parse.Root.Kind != NodeKind.Call) return ""; // if not actually a function, return
             CallNode node = (CallNode)parse.Root;
-            return ProcessFunc(node);
+            return ProcessFunc(node, null); // fix me
         }
     }
 }
-
-/*
-              // Below code written by Ryan for testing purposes
-              ParsedExcelData parsedFileData = JsonConvert.DeserializeObject<ParsedExcelData>(File.ReadAllText("parsed-BudgetSheet.xlsx.json"));
-              foreach (ParsedCell c in parsedFileData.Cells)
-              {
-                  Console.WriteLine("" + c.Value + " " + c.CellId + " " + c.Formula);
-              }
-              for (int i = 0; i < 6; i++)
-              {
-                  Console.WriteLine(" ================================================ ");
-              }
-              foreach (ParsedDefinedNames n in parsedFileData.DefinedNames)
-              {
-                  Console.WriteLine("" + n.Name + " " + n.Value + " " + n);
-              }
-              for (int i = 0; i < 6; i++)
-              {
-                  Console.WriteLine(" ================================================ ");
-              }
-              foreach (ParsedTable t in parsedFileData.Tables)
-              {
-                  Console.WriteLine(t.Name);
-                  foreach (ParsedTableColumn c in t.Columns)
-                  {
-                      Console.WriteLine(c.Name);
-                      Console.WriteLine(c.Formula);
-                  }
-                  Console.WriteLine(" ===== ");
-              }
-              */
