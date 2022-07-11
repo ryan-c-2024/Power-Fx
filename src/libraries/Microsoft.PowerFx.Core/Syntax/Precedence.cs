@@ -4,7 +4,7 @@
 namespace Microsoft.PowerFx.Syntax
 {
     // Operator precedence.
-    internal enum Precedence : byte
+    public enum Precedence : byte
     {
         None,
         SingleExpr,

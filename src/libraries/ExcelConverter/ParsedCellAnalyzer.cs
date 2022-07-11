@@ -5,7 +5,9 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Microsoft.PowerFx;
+using Microsoft.PowerFx.Core;
 using Microsoft.PowerFx.Syntax;
+
 
 namespace ExcelConverter
 {
@@ -23,7 +25,7 @@ namespace ExcelConverter
      *      - Pass formula root node to Analyze(TexlNode node)
      */
 
-    public class ParsedCellAnalyzer : TexlVisitor
+    public class ParsedCellAnalyzer : TexlFunctionalVisitor<String, Precedence>
     {
         private string transformedOutput;
         private ExcelParser.ParsedCell analyzedCell;
@@ -54,157 +56,39 @@ namespace ExcelConverter
         {
             // ACCEPT AND VISIT ALL RETURN VOID SO DATA TO RETURNED SOME OTHER WAY
             var retVal = "";
-            switch (node.Kind)
+            var analyzer = new ParsedCellAnalyzer(cell);
+
+            if (cell != null)
             {
-                case NodeKind.NumLit:
-                    // how can we do this? we need ParsedCell object to get sheet name and cell ID
-                    //GenerateGenericName()
-                    var analyzer = new ParsedCellAnalyzer(cell);
-                    node.Accept(analyzer);
-                    break;
-                case NodeKind.BinaryOp:
-                    var binaryOpNode = (BinaryOpNode)node;
-
-                    // analyze left + right side nodes
-                    var leftAnalyzer = new ParsedCellAnalyzer(cell);
-                    binaryOpNode.Left.Accept(leftAnalyzer);
-
-                    var rightAnalyzer = new ParsedCellAnalyzer(cell);
-                    binaryOpNode.Right.Accept(rightAnalyzer);
-
-                    // Maybe adding the "+" could also be done in the Pre or Post visit
-                    retVal += leftAnalyzer.GetConvertedOutput() + " + " + rightAnalyzer.GetConvertedOutput();
-                    break;
-                case NodeKind.Call:
-                    var callNode = (CallNode)node;
-                    // process function
-
-                    var functionAnalyzer = new ParsedCellAnalyzer(cell);
-                    retVal += Utils.AdjustFuncName(callNode.Head.Name) + "(";                
-                    
-                    // analyze child nodes
-                    foreach (var argNode in callNode.Args.ChildNodes)
-                    {
-                        var childAnalyzer = new ParsedCellAnalyzer(cell);
-                        argNode.Accept(childAnalyzer);
-                        retVal += childAnalyzer.GetConvertedOutput() + ", ";
-                    }
-
-                    retVal = retVal.TrimEnd();
-                    if (retVal.EndsWith(''))
-                    {
-                        retVal = retVal.Trim(',');
-                    }
-
-                    retVal += ")";
-                    
-                    break;
-                default:
-                    if (cell != null)
-                    {
-                        retVal += cell + node.ToString();
-                    }
-                    else
-                    {
-                        retVal += node.ToString();
-                    }
-                    break;
+                retVal += cell + node.ToString();
+            }
+            else
+            {
+                retVal += node.ToString();
             }
 
             return retVal;
+
+            return node.Accept(analyzer, Precedence.None);
+
+           
+            
         }
 
-        public String GetConvertedOutput() // wrapper function that returns transformed output string
-        {
-            return transformedOutput;
-        }
-
-        public override bool PreVisit(CallNode node)
-        {
-            isFunction = true; // mark this cell as being a function
-            var retVal = Analyze(node, null);
-            transformedOutput += retVal;
-
-            return false;
-        }
-
-        public override bool PreVisit(BinaryOpNode node)
-        {
-            var retVal = Analyze(node, null);
-            transformedOutput += retVal;
-            return false;
-        }
-
-        public override void PostVisit(StrInterpNode node)
-        {
-        }
-
-        public override void PostVisit(DottedNameNode node)
-        {
-        }
-
-        public override void PostVisit(UnaryOpNode node)
-        {
-        }
-
-        public override void PostVisit(BinaryOpNode node)
-        {
-        }
-
-        public override void PostVisit(VariadicOpNode node)
-        {
-        }
-
-        public override void PostVisit(CallNode node)
-        {
-
-        }
-
-        public override void PostVisit(ListNode node)
-        {
-        }
-
-        public override void PostVisit(RecordNode node)
-        {
-        }
-
-        public override void PostVisit(TableNode node)
-        {
-        }
-
-        public override void PostVisit(AsNode node)
-        {
-        }
-
-        public override void Visit(ErrorNode node)
-        {
-        }
-
-        public override void Visit(BlankNode node)
-        {
-        }
-
-        public override void Visit(BoolLitNode node)
+        public override String Visit(BoolLitNode node, Precedence context)
         {
             transformedOutput += node.ToString();
+            return "";
         }
 
-        public override void Visit(StrLitNode node)
+        public override String Visit(NumLitNode node, Precedence context)
         {
             transformedOutput += node.ToString();
+            return "";
         }
 
-        public override void Visit(NumLitNode node)
+        public override String Visit(FirstNameNode node, Precedence context)
         {
-            //transformedOutput = Converter.CreateVariable(cell.SheetName, cell.CellId, node);
-            transformedOutput += node.ToString();
-        }
-
-        public override void Visit(FirstNameNode node)
-        {
-            // I THINK....
-            // expand range (contains _range_)
-            // replace with defined name or generic variable name
             if (isFunction && analyzedCell != null)
             {
                 transformedOutput += Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
@@ -213,14 +97,66 @@ namespace ExcelConverter
             {
                 transformedOutput += node.Ident.Name.Value;
             }
+            return "";
         }
 
-        public override void Visit(ParentNode node)
+        public override String Visit(StrLitNode node, Precedence context)
         {
+            transformedOutput += node.ToString();
+            return "";
         }
 
-        public override void Visit(SelfNode node)
+        public override String Visit(BinaryOpNode node, Precedence context)
         {
+            var binaryOpNode = (BinaryOpNode)node;
+
+            String left = node.Left.Accept(this, Precedence.None);
+            String right = node.Right.Accept(this, Precedence.None);
+
+            return left + " + " + right;
+        }
+
+        public override String Visit(CallNode node, Precedence context)
+        {
+            isFunction = true; // mark this cell as being a function
+            var retVal = Analyze(node, null);
+            transformedOutput += retVal;
+
+            var callNode = (CallNode)node;
+            // process function
+
+            var functionAnalyzer = new ParsedCellAnalyzer(cell);
+            retVal += Utils.AdjustFuncName(callNode.Head.Name) + "(";
+
+            // analyze child nodes
+            foreach (var argNode in callNode.Args.ChildNodes)
+            {
+                String output = argNode.Accept(this, Precedence.None);
+                retVal += output;
+            }
+
+            retVal = retVal.TrimEnd();
+            if (retVal.EndsWith(''))
+            {
+                retVal = retVal.Trim(',');
+            }
+
+            retVal += ")";
+
+
+            return "";
+
+
+        }
+
+        public override String Visit(ListNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+        public String GetConvertedOutput() // wrapper function that returns transformed output string
+        {
+            return transformedOutput;
         }
     }
 }
