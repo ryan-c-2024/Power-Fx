@@ -35,47 +35,44 @@ namespace ExcelConverterTests
         [Fact]
         public void GenerateNameTests()
         {
-            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
-
-            Assert.Equal("", conv.GenerateGenericName("", ""));
-            Assert.Equal("", conv.GenerateGenericName(null, null));
-            Assert.Equal("Sheet1_A1", conv.GenerateGenericName("Sheet1", "A1"));
-            Assert.Equal("TestSheet_E10", conv.GenerateGenericName("TestSheet", "E10"));
-            Assert.Equal("Balances_B5", conv.GenerateGenericName("Balances", "B5"));
-            Assert.Equal("Sheet1380_F4", conv.GenerateGenericName("Sheet1380", "F4"));
-            Assert.Equal("ThisIsAReallyLongSheetname_Z35", conv.GenerateGenericName("ThisIsAReallyLongSheetname", "Z35"));
+            Assert.Equal("", ExcelConverter.Utils.GenerateGenericName("", ""));
+            Assert.Equal("", ExcelConverter.Utils.GenerateGenericName(null, null));
+            Assert.Equal("Sheet1_A1", ExcelConverter.Utils.GenerateGenericName("Sheet1", "A1"));
+            Assert.Equal("TestSheet_E10", ExcelConverter.Utils.GenerateGenericName("TestSheet", "E10"));
+            Assert.Equal("Balances_B5", ExcelConverter.Utils.GenerateGenericName("Balances", "B5"));
+            Assert.Equal("Sheet1380_F4", ExcelConverter.Utils.GenerateGenericName("Sheet1380", "F4"));
+            Assert.Equal("ThisIsAReallyLongSheetname_Z35", ExcelConverter.Utils.GenerateGenericName("ThisIsAReallyLongSheetname", "Z35"));
         }
 
         [Fact]
         public void BasicFuncConvertTests()
         {
-            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
             var recalc = new RecalcEngine();
             var engine = new Engine(new PowerFxConfig());
 
-            var pfxValue = recalc.Eval(conv.ProcessFunc("ABS(-123)", engine));
+            var pfxValue = recalc.Eval(Utils.ProcessFunc("ABS(-123)", engine));
             Assert.Equal("123", pfxValue.ToObject().ToString());
 
-            pfxValue = recalc.Eval(conv.ProcessFunc("ACOS(-1)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ACOS(-1)", engine));
             decimal roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("3.14", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(conv.ProcessFunc("ACOT(-1)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ACOT(-1)", engine));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("2.36", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(conv.ProcessFunc("AND(1=1, 0=0)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("AND(1=1, 0=0)", engine));
             Assert.Equal("True", pfxValue.ToObject().ToString());
 
-            pfxValue = recalc.Eval(conv.ProcessFunc("ASIN(-1)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ASIN(-1)", engine));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("-1.57", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(conv.ProcessFunc("ATAN(-1)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ATAN(-1)", engine));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("-0.79", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(conv.ProcessFunc("ATAN2(1, -1)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ATAN2(1, -1)", engine));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("-0.79", roundedDecimal.ToString());
         }
@@ -83,26 +80,24 @@ namespace ExcelConverterTests
         [Fact]
         public void NestedFuncConvertTests()
         {
-            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
             var recalc = new RecalcEngine();
             var engine = new Engine(new PowerFxConfig());
 
-            var pfxValue = recalc.Eval(conv.ProcessFunc("DAY(DATE(2022, 6, 13))", engine));
+            var pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("DAY(DATE(2022, 6, 13))", engine));
             Assert.Equal("13", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(conv.ProcessFunc("YEAR(DATE(2022,6,13))", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("YEAR(DATE(2022,6,13))", engine));
             Assert.Equal("2022", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(conv.ProcessFunc("SUM(1,SUM(1,2))", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("SUM(1,SUM(1,2))", engine));
             Assert.Equal("4", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(conv.ProcessFunc("SUM(SUM(1,2), 1)", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("SUM(SUM(1,2), 1)", engine));
             Assert.Equal("4", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(conv.ProcessFunc("SUM(1,SUM(SUM(SUM(4,6),SUM(5,9)),2))", engine));
+            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("SUM(1,SUM(SUM(SUM(4,6),SUM(5,9)),2))", engine));
             Assert.Equal("27", pfxValue.ToObject().ToString());
         }
 
         [Fact]
         public void RangeFuncConvertTests()
         {
-            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
             var recalc = new RecalcEngine();
             var engine = new Engine(new PowerFxConfig());
 
@@ -112,9 +107,9 @@ namespace ExcelConverterTests
         [Fact]
         public void SheetReadTests()
         {
-            var data = Excel2AppEngine.ExcelParser.ParseSpreadsheet("TestSheet.xlsx", false);
+            var data = ExcelConverter.ExcelParser.ParseSpreadsheet("TestSheet.xlsx", false);
             HashSet<String> set = new HashSet<string>();
-            foreach (ParsedCell c in data.Cells)
+            foreach (ExcelConverter.ExcelParser.ParsedCell c in data.Cells)
             {
                 if (c == null || c.SheetName != "SheetReadTest") continue;
 
@@ -158,7 +153,6 @@ namespace ExcelConverterTests
         [Fact]
         public void CasingConvertTests()
         {
-            Excel2AppEngine.Converter conv = new Excel2AppEngine.Converter();
             var engine = new RecalcEngine();
 
             String convertedFunc = conv.AdjustFuncName("SUM");

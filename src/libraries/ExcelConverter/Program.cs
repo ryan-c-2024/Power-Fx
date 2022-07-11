@@ -49,34 +49,15 @@ namespace ExcelConverter
                     ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
                     var result = ParsedCellAnalyzer.Analyze(p.Root, c);
                     Console.WriteLine(result);
-
-                    /*
-                      if (p.Root.Kind == NodeKind.Call) // if the cell equals a function
-                    {
-                        Console.WriteLine(conv.ProcessFunc((CallNode)p.Root, c));
-                    }
-                    else
-                    {
-
-                    }
-                    */
-
                 }
                 else
                 {
                     ParseResult p = engine.Parse(c.Value); // parse not just if formula, that way we can recognize string/numlit
                     var result = ParsedCellAnalyzer.Analyze(p.Root, c);
                     Console.WriteLine(result);
-
-                    /*
-                      if (p.Root.Kind == NodeKind.NumLit) // if the cell equals a numerical value
-                    {
-                        conv.CreateVariable(c.SheetName, c.CellId, (NumLitNode)p.Root);
-                    }
-                    */
                 }
             }
         }
 
-            }
+    }
 }

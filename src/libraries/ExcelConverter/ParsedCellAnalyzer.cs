@@ -53,7 +53,6 @@ namespace ExcelConverter
         public static string Analyze(TexlNode node, ExcelParser.ParsedCell cell = null)
         {
             // ACCEPT AND VISIT ALL RETURN VOID SO DATA TO RETURNED SOME OTHER WAY
-
             var retVal = "";
             switch (node.Kind)
             {
@@ -81,19 +80,23 @@ namespace ExcelConverter
                     // process function
 
                     var functionAnalyzer = new ParsedCellAnalyzer(cell);
-
+                    retVal += Utils.AdjustFuncName(callNode.Head.Name) + "(";                
+                    
                     // analyze child nodes
                     foreach (var argNode in callNode.Args.ChildNodes)
                     {
                         var childAnalyzer = new ParsedCellAnalyzer(cell);
                         argNode.Accept(childAnalyzer);
-                        retVal += childAnalyzer.GetConvertedOutput() + ",";
+                        retVal += childAnalyzer.GetConvertedOutput() + ", ";
                     }
 
-                    if (retVal.EndsWith(','))
+                    retVal = retVal.TrimEnd();
+                    if (retVal.EndsWith(''))
                     {
                         retVal = retVal.Trim(',');
-                    } 
+                    }
+
+                    retVal += ")";
                     
                     break;
                 default:
@@ -121,7 +124,6 @@ namespace ExcelConverter
             isFunction = true; // mark this cell as being a function
             var retVal = Analyze(node, null);
             transformedOutput += retVal;
-            Console.WriteLine(retVal);
 
             return false;
         }
