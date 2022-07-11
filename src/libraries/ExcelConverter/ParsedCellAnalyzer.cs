@@ -7,7 +7,7 @@ using System.Text;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Syntax;
 
-namespace Excel2AppEngine
+namespace ExcelConverter
 {
     /*
      * 1. ParsedCellAnalyzer can extend TexlVisitor
@@ -26,21 +26,31 @@ namespace Excel2AppEngine
     public class ParsedCellAnalyzer : TexlVisitor
     {
         private string transformedOutput;
+        private ExcelParser.ParsedCell analyzedCell;
+        private bool isFunction;
 
         public ParsedCellAnalyzer()
         {
             transformedOutput = "";
+            isFunction = false;
+        }
+
+        public ParsedCellAnalyzer(ExcelParser.ParsedCell cell)
+        {
+            transformedOutput = "";
+            isFunction = false;
+            analyzedCell = cell;
         }
 
 
-        private static string Analyze(string formula, ParsedCell cell = null)
+        public static string Analyze(string formula, ExcelParser.ParsedCell cell = null)
         {
             var engine = new Engine(new PowerFxConfig());
             var parseResult = engine.Parse(formula);
             return Analyze(parseResult.Root, cell);
         }
 
-        private static string Analyze(TexlNode node, ParsedCell cell = null)
+        public static string Analyze(TexlNode node, ExcelParser.ParsedCell cell = null)
         {
             // ACCEPT AND VISIT ALL RETURN VOID SO DATA TO RETURNED SOME OTHER WAY
 
@@ -50,17 +60,17 @@ namespace Excel2AppEngine
                 case NodeKind.NumLit:
                     // how can we do this? we need ParsedCell object to get sheet name and cell ID
                     //GenerateGenericName()
-                    var analyzer = new ParsedCellAnalyzer();
+                    var analyzer = new ParsedCellAnalyzer(cell);
                     node.Accept(analyzer);
                     break;
                 case NodeKind.BinaryOp:
                     var binaryOpNode = (BinaryOpNode)node;
 
                     // analyze left + right side nodes
-                    var leftAnalyzer = new ParsedCellAnalyzer();
+                    var leftAnalyzer = new ParsedCellAnalyzer(cell);
                     binaryOpNode.Left.Accept(leftAnalyzer);
 
-                    var rightAnalyzer = new ParsedCellAnalyzer();
+                    var rightAnalyzer = new ParsedCellAnalyzer(cell);
                     binaryOpNode.Right.Accept(rightAnalyzer);
 
                     // Maybe adding the "+" could also be done in the Pre or Post visit
@@ -70,12 +80,14 @@ namespace Excel2AppEngine
                     var callNode = (CallNode)node;
                     // process function
 
+                    var functionAnalyzer = new ParsedCellAnalyzer(cell);
+
                     // analyze child nodes
                     foreach (var argNode in callNode.Args.ChildNodes)
                     {
-                        var analyzer = new ParsedCellAnalyzer();
-                        argNode.Accept(analyzer);
-                        retVal += analyzer.GetConvertedOutput() + ",";
+                        var childAnalyzer = new ParsedCellAnalyzer(cell);
+                        argNode.Accept(childAnalyzer);
+                        retVal += childAnalyzer.GetConvertedOutput() + ",";
                     }
 
                     if (retVal.EndsWith(','))
@@ -83,8 +95,6 @@ namespace Excel2AppEngine
                         retVal = retVal.Trim(',');
                     } 
                     
-
-                  //  node.Accept(analyzer);
                     break;
                 default:
                     if (cell != null)
@@ -108,10 +118,10 @@ namespace Excel2AppEngine
 
         public override bool PreVisit(CallNode node)
         {
+            isFunction = true; // mark this cell as being a function
             var retVal = Analyze(node, null);
             transformedOutput += retVal;
             Console.WriteLine(retVal);
-            //var retVal = Analyze(node);
 
             return false;
         }
@@ -193,11 +203,14 @@ namespace Excel2AppEngine
             // I THINK....
             // expand range (contains _range_)
             // replace with defined name or generic variable name
-            if (cell == null)
+            if (isFunction && analyzedCell != null)
             {
-                transformedOutput += Converter.GenerateGenericName()
+                transformedOutput += Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
             }
-            transformedOutput += node.ToString();
+            else
+            {
+                transformedOutput += node.Ident.Name.Value;
+            }
         }
 
         public override void Visit(ParentNode node)
