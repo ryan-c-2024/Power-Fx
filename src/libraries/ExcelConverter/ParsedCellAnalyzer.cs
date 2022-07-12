@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Net.Http.Headers;
 using System.Text;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Core;
@@ -27,19 +28,16 @@ namespace ExcelConverter
 
     public class ParsedCellAnalyzer : TexlFunctionalVisitor<String, Precedence>
     {
-        private string transformedOutput;
         private ExcelParser.ParsedCell analyzedCell;
         private bool isFunction;
 
         public ParsedCellAnalyzer()
         {
-            transformedOutput = "";
             isFunction = false;
         }
 
         public ParsedCellAnalyzer(ExcelParser.ParsedCell cell)
         {
-            transformedOutput = "";
             isFunction = false;
             analyzedCell = cell;
         }
@@ -54,56 +52,55 @@ namespace ExcelConverter
 
         public static string Analyze(TexlNode node, ExcelParser.ParsedCell cell = null)
         {
-            // ACCEPT AND VISIT ALL RETURN VOID SO DATA TO RETURNED SOME OTHER WAY
-            var retVal = "";
             var analyzer = new ParsedCellAnalyzer(cell);
-
-            if (cell != null)
-            {
-                retVal += cell + node.ToString();
-            }
-            else
-            {
-                retVal += node.ToString();
-            }
-
-            return retVal;
-
             return node.Accept(analyzer, Precedence.None);
+        }
 
-           
-            
+
+        public override String Visit(UnaryOpNode node, Precedence context)
+        {
+            return node.Op.ToString() + node.Child.Accept(this, Precedence.None);
         }
 
         public override String Visit(BoolLitNode node, Precedence context)
         {
-            transformedOutput += node.ToString();
-            return "";
+            return node.ToString();
         }
 
         public override String Visit(NumLitNode node, Precedence context)
         {
-            transformedOutput += node.ToString();
-            return "";
+            if (isFunction && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
+            {
+                return node.ActualNumValue.ToString();
+            }
+            else
+            {
+                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, node);
+            }
         }
 
         public override String Visit(FirstNameNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null)
+            if (isFunction && analyzedCell != null) // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
             {
-                transformedOutput += Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
+                return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
             }
-            else
+            else // otherwise, treat it as a new String variable creation and a cell with text in it
             {
-                transformedOutput += node.Ident.Name.Value;
+                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, "\"" + node.Ident.Name.Value + "\"");
             }
-            return "";
         }
 
         public override String Visit(StrLitNode node, Precedence context)
         {
-            transformedOutput += node.ToString();
-            return "";
+            if (isFunction && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
+            {
+                return "\"" + node.Value + "\""; // wrap text in quotes so it is treated as literal text and not accidentally as variable
+            }
+            else
+            {
+                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, node);
+            }
         }
 
         public override String Visit(BinaryOpNode node, Precedence context)
@@ -118,35 +115,33 @@ namespace ExcelConverter
 
         public override String Visit(CallNode node, Precedence context)
         {
-            isFunction = true; // mark this cell as being a function
-            var retVal = Analyze(node, null);
-            transformedOutput += retVal;
+            isFunction = true; // Mark this as a function so we treat values literally and don't generate generic vraibles
+            ListNode funcArgs = node.Args;
+            var funcName = node.Head.Name;
 
-            var callNode = (CallNode)node;
-            // process function
+            String adjustedFuncName = Utils.AdjustFuncName(funcName.ToString()) + "("; // convert func name to PowerFX style
+            IReadOnlyList<TexlNode> children = funcArgs.ChildNodes;
 
-            var functionAnalyzer = new ParsedCellAnalyzer(cell);
-            retVal += Utils.AdjustFuncName(callNode.Head.Name) + "(";
-
-            // analyze child nodes
-            foreach (var argNode in callNode.Args.ChildNodes)
+            TexlNode arg = children[0];
+            for (int i = 0; i < children.Count; i++) // iterate over args and append them to output string
             {
-                String output = argNode.Accept(this, Precedence.None);
-                retVal += output;
+                arg = children[i];
+                String append = "";
+
+                append += arg.Accept(this, Precedence.None);
+
+                if (i == (children.Count - 1)) // if only one argument or this is the last arg, close the parentheses
+                {
+                    adjustedFuncName += append + ")"; // injects arg.ToString()
+                }
+                else if (i >= 0 && i < (children.Count - 1)) // if not the last arg, add a comma and space for the next up arg
+                {
+                    adjustedFuncName += append + ", ";
+                }
+
             }
 
-            retVal = retVal.TrimEnd();
-            if (retVal.EndsWith(''))
-            {
-                retVal = retVal.Trim(',');
-            }
-
-            retVal += ")";
-
-
-            return "";
-
-
+            return adjustedFuncName;
         }
 
         public override String Visit(ListNode node, Precedence context)
@@ -154,9 +149,57 @@ namespace ExcelConverter
             return node.ToString();
         }
 
-        public String GetConvertedOutput() // wrapper function that returns transformed output string
+        public override string Visit(TableNode node, Precedence context)
         {
-            return transformedOutput;
+            throw new NotImplementedException();
+        }
+
+
+        public override String Visit(AsNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+
+        public override String Visit(StrInterpNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+
+        public override String Visit(SelfNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+        public override String Visit(RecordNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+        public override String Visit(ParentNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+
+        public override String Visit(ErrorNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+        public override String Visit(BlankNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+        public override String Visit(DottedNameNode node, Precedence context)
+        {
+            return node.ToString();
+        }
+
+        public override String Visit(VariadicOpNode node, Precedence context)
+        {
+            return node.ToString();
         }
     }
 }

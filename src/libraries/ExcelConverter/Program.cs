@@ -43,7 +43,6 @@ namespace ExcelConverter
             {
                 if (c == null) continue;
 
-
                 if (c.Formula != null)
                 {
                     ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit

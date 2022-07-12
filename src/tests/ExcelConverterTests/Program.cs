@@ -5,7 +5,7 @@ using System;
 using System.Globalization;
 using DocumentFormat.OpenXml.Spreadsheet;
 using DocumentFormat.OpenXml.Wordprocessing;
-using Excel2AppEngine;
+using ExcelConverter;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Core;
 using Microsoft.PowerFx.Core.Functions;
@@ -155,17 +155,17 @@ namespace ExcelConverterTests
         {
             var engine = new RecalcEngine();
 
-            String convertedFunc = conv.AdjustFuncName("SUM");
+            String convertedFunc = Utils.AdjustFuncName("SUM");
             Assert.Equal("Sum", convertedFunc);
-            convertedFunc = conv.AdjustFuncName("ABS");
+            convertedFunc = Utils.AdjustFuncName("ABS");
             Assert.Equal("Abs", convertedFunc);
-            convertedFunc = conv.AdjustFuncName("RADIANS");
+            convertedFunc = Utils.AdjustFuncName("RADIANS");
             Assert.Equal("Radians", convertedFunc);
-            convertedFunc = conv.AdjustFuncName("SIN");
+            convertedFunc = Utils.AdjustFuncName("SIN");
             Assert.Equal("Sin", convertedFunc);
-            convertedFunc = conv.AdjustFuncName("");
+            convertedFunc = Utils.AdjustFuncName("");
             Assert.Equal("", convertedFunc);
-            convertedFunc = conv.AdjustFuncName("SUPERCALIFRAGILISTICEXPIALIDOCIOUS");
+            convertedFunc = Utils.AdjustFuncName("SUPERCALIFRAGILISTICEXPIALIDOCIOUS");
             Assert.Equal("Supercalifragilisticexpialidocious", convertedFunc);
         }
 

@@ -30,10 +30,15 @@ namespace ExcelConverter
 
         }
 
-        public static String CreateVariable(String sheetName, String cellNum, NumLitNode node)
+        public static String CreateVariable(String sheetName, String cellNum, String variableValue)
         {
             String genericName = GenerateGenericName(sheetName, cellNum);
-            return genericName + " = " + node.ActualNumValue;
+            return genericName + " = " + variableValue;
+        }
+
+        public static String CreateVariable(String sheetName, String cellNum, TexlNode node)
+        {
+            return CreateVariable(sheetName, cellNum, node.ToString());
         }
 
         // Takes sheet name and cell number and creates a generic default PowerFX variable name for it
@@ -141,7 +146,7 @@ namespace ExcelConverter
 
             return adjustedFuncName;
         }
-        public String ProcessFunc(String formula, Engine engine) // overload for ProcessFunc that wraps around and takes String input and engine
+        public static String ProcessFunc(String formula, Engine engine) // overload for ProcessFunc that wraps around and takes String input and engine
         {
             ParseResult p = engine.Parse(formula); // parse to get type and information using the passed in engine object
             if (p.Root.Kind != NodeKind.Call) return ""; // if not actually a function, return
@@ -150,7 +155,7 @@ namespace ExcelConverter
 
         }
 
-        public String ProcessFunc(String formula, ParseResult parse) // overload for ProcessFunc that wraps around and takes String input and parseresult
+        public static String ProcessFunc(String formula, ParseResult parse) // overload for ProcessFunc that wraps around and takes String input and parseresult
         {
             if (parse.Root.Kind != NodeKind.Call) return ""; // if not actually a function, return
             CallNode node = (CallNode)parse.Root;
