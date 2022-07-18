@@ -162,11 +162,13 @@ namespace ExcelConverter
             return ProcessFunc(node, null); // fix me
         }
 
+        // Converts a BinaryOp enum value to the actual BinaryOp char
         public static String ConvertBinaryOp(BinaryOp op)
         {
             return binaryOpMap[op];
         }
 
+        // Converts a UnaryOp enum value to the actual UnaryOp char
         public static String ConvertUnaryOp(UnaryOp op)
         {
             return unaryOpMap[op];

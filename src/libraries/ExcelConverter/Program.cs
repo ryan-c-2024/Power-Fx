@@ -43,9 +43,10 @@ namespace ExcelConverter
             {
                 if (c == null) continue;
 
+                // parse formula if there is one, otherwise parse literal value in the cell
                 ParseResult p = c.Formula == null ? engine.Parse(c.Value) : engine.Parse(c.Formula);
                 
-                // only convert to PFX if either a formula or a literal number node
+                // only want to run PFX conversion if either a formula or a literal number node
                 if (c.Formula != null || p.Root.Kind == NodeKind.NumLit) 
                 {
                     String result = ParsedCellAnalyzer.Analyze(p.Root, c);
