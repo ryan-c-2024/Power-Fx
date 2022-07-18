@@ -28,8 +28,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		.editorconfig = .editorconfig
 		CodeCoverage.runsettings = CodeCoverage.runsettings
 		Directory.Build.Props = Directory.Build.Props
-		PowerFx.ruleset = PowerFx.ruleset
 		PowerFx.Off.ruleset = PowerFx.Off.ruleset
+		PowerFx.ruleset = PowerFx.ruleset
 	EndProjectSection
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.PowerFx.Transport.Attributes", "libraries\Microsoft.PowerFx.Transport.Attributes\Microsoft.PowerFx.Transport.Attributes.csproj", "{ED98A690-863A-443C-9DBB-8F0F5BCACE2B}"
@@ -37,6 +37,10 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.PowerFx.Connectors", "libraries\Microsoft.PowerFx.Connectors\Microsoft.PowerFx.Connectors.csproj", "{CEE27893-EE7D-4832-858F-70AF6BA325E3}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Microsoft.PowerFx.Connectors.Tests", "tests\Microsoft.PowerFx.Connectors.Tests\Microsoft.PowerFx.Connectors.Tests.csproj", "{81586372-FE63-4F6D-923D-B47E94487676}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "ExcelConverter", "libraries\ExcelConverter\ExcelConverter.csproj", "{F41B7878-D442-4C41-AF57-47594D3AF6FA}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ExcelConverterTests", "tests\ExcelConverterTests\ExcelConverterTests.csproj", "{770A1200-1798-4611-855A-D266BC8CE4E6}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -76,6 +80,14 @@ Global
 		{81586372-FE63-4F6D-923D-B47E94487676}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{81586372-FE63-4F6D-923D-B47E94487676}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{81586372-FE63-4F6D-923D-B47E94487676}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F41B7878-D442-4C41-AF57-47594D3AF6FA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F41B7878-D442-4C41-AF57-47594D3AF6FA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F41B7878-D442-4C41-AF57-47594D3AF6FA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F41B7878-D442-4C41-AF57-47594D3AF6FA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{770A1200-1798-4611-855A-D266BC8CE4E6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{770A1200-1798-4611-855A-D266BC8CE4E6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{770A1200-1798-4611-855A-D266BC8CE4E6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{770A1200-1798-4611-855A-D266BC8CE4E6}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -89,6 +101,8 @@ Global
 		{ED98A690-863A-443C-9DBB-8F0F5BCACE2B} = {4269F3C3-6B42-419B-B64A-3E6DC0F1574A}
 		{CEE27893-EE7D-4832-858F-70AF6BA325E3} = {4269F3C3-6B42-419B-B64A-3E6DC0F1574A}
 		{81586372-FE63-4F6D-923D-B47E94487676} = {AD743B78-D61F-4FBF-B620-FA83CE599A50}
+		{F41B7878-D442-4C41-AF57-47594D3AF6FA} = {4269F3C3-6B42-419B-B64A-3E6DC0F1574A}
+		{770A1200-1798-4611-855A-D266BC8CE4E6} = {AD743B78-D61F-4FBF-B620-FA83CE599A50}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {30372F91-B206-4351-A621-F0E2773C337B}
