@@ -90,17 +90,6 @@ namespace ExcelConverter
                         SheetData sheetData = workSheet.Elements<SheetData>().First();
                         SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();
 
-
-                    /*
-                     SHARED STRING TABLE TESTING
-                     */
-                   // foreach (var x in sharedStringTable)
-                  //  {
-                  //      Console.WriteLine(x.Text.Text);
-                  //  }
-
-
-                   // Console.WriteLine(sharedStringTable);
                         var sharedFormulas = new Dictionary<uint, SharedFormula>();
 
 

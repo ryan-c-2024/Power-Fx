@@ -109,21 +109,10 @@ namespace ExcelConverter
         {
             isFormula = true;
 
-         
-
             String opString = Utils.ConvertBinaryOp(node.Op);
             String left = node.Left.Accept(this, Precedence.None);
             String right = node.Right.Accept(this, Precedence.None);
-
-            if (node.Left.ToString()[0] == '(')
-            {
-                left = "(" + left + ")";
-            }
-            if (node.Right.ToString()[0] == '(')
-            {
-                right = "(" + right + ")";
-            }
-
+            
             return left + " " + opString + " " + right;
         }
 

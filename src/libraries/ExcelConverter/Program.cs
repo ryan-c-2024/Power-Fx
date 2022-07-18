@@ -37,26 +37,19 @@ namespace ExcelConverter
             ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
-            //ParsedCellAnalyzer pc = new ParsedCellAnalyzer();
-            
+
+            // Iterate through all parsed cells and convert to PFX if applicable            
             foreach (ExcelParser.ParsedCell c in data.Cells)
             {
                 if (c == null) continue;
 
-                if (c.Formula != null)
+                ParseResult p = c.Formula == null ? engine.Parse(c.Value) : engine.Parse(c.Formula);
+                
+                // only convert to PFX if either a formula or a literal number node
+                if (c.Formula != null || p.Root.Kind == NodeKind.NumLit) 
                 {
-                    ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
-                    var result = ParsedCellAnalyzer.Analyze(p.Root, c);
+                    String result = ParsedCellAnalyzer.Analyze(p.Root, c);
                     Console.WriteLine(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
-                }
-                else
-                {
-                    ParseResult p = engine.Parse(c.Value); // parse not just if formula, that way we can recognize string/numlit
-                    if (p.Root.Kind == NodeKind.NumLit)
-                    {
-                        var result = ParsedCellAnalyzer.Analyze(p.Root, c);
-                        Console.WriteLine(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
-                    }
                 }
             }
         }
