@@ -162,5 +162,41 @@ namespace ExcelConverter
             return ProcessFunc(node, null); // fix me
         }
 
+        public static String ConvertBinaryOp(BinaryOp op)
+        {
+            return binaryOpMap[op];
+        }
+
+        public static String ConvertUnaryOp(UnaryOp op)
+        {
+            return unaryOpMap[op];
+        }
+
+        private static Dictionary<BinaryOp, String> binaryOpMap = new Dictionary<BinaryOp, String>()
+            {
+                {BinaryOp.Or, "||"},
+                {BinaryOp.And, "&&"},
+                {BinaryOp.Concat, "CONCAT"},
+                {BinaryOp.Add, "+"},
+                {BinaryOp.Mul, "*"},
+                {BinaryOp.Div, "/"},
+                {BinaryOp.Power, "^"},
+                {BinaryOp.Equal, "="},
+                {BinaryOp.NotEqual, "!="},
+                {BinaryOp.Less, "<"},
+                {BinaryOp.LessEqual, "<="},
+                {BinaryOp.Greater, ">"},
+                {BinaryOp.GreaterEqual, ">="},
+                {BinaryOp.In, "IN"},
+                {BinaryOp.Exactin, "EXACTIN"},
+                {BinaryOp.Error, "ERROR"}
+            };
+
+        private static Dictionary<UnaryOp, String> unaryOpMap = new Dictionary<UnaryOp, String>()
+            {
+                {UnaryOp.Not, "!"},
+                {UnaryOp.Minus, "-"},
+                {UnaryOp.Percent, "%"}
+            };
     }
 }

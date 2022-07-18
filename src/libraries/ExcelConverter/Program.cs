@@ -34,7 +34,7 @@ namespace ExcelConverter
         {
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
 
-            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
             //ParsedCellAnalyzer pc = new ParsedCellAnalyzer();
@@ -47,13 +47,16 @@ namespace ExcelConverter
                 {
                     ParseResult p = engine.Parse(c.Formula); // parse not just if formula, that way we can recognize string/numlit
                     var result = ParsedCellAnalyzer.Analyze(p.Root, c);
-                    Console.WriteLine(result);
+                    Console.WriteLine(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
                 }
                 else
                 {
                     ParseResult p = engine.Parse(c.Value); // parse not just if formula, that way we can recognize string/numlit
-                    var result = ParsedCellAnalyzer.Analyze(p.Root, c);
-                    Console.WriteLine(result);
+                    if (p.Root.Kind == NodeKind.NumLit)
+                    {
+                        var result = ParsedCellAnalyzer.Analyze(p.Root, c);
+                        Console.WriteLine(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
+                    }
                 }
             }
         }

@@ -13,32 +13,33 @@ using Microsoft.PowerFx.Syntax;
 namespace ExcelConverter
 {
     /*
-     * 1. ParsedCellAnalyzer can extend TexlVisitor
+     * 1. ParsedCellAnalyzer extends TexlFunctionalVisitor (supports Accept returning values)
      * 2. ParsedCellAnalyzer.Analyze(string formula): use engine to parse nodes of formula
-     * 3. Analyze(TexlNode node): "general recursion" - switch on node type, process nodes, or Accept new ParsedCellAnalyzer instance in child nodes/args
+     * 3. Analyze(TexlNode node): "general recursion" - Accept new ParsedCellAnalyzer instance in child nodes/args
      * 4. ParsedCellAnalyzer: hold any object structures needed for that specific node, implement any specific functions
      *  e.g., Variable names <-> Identifier map, ranges as list of cells, calling pretty print, etc.
      *  
      *  Flow:
      *      - Parse Excel workbook
-     *      - Pass parsed cell formulas to ParsedCellAnalyzer.Analyze(string formula)
-     *      - Use PFX Engine to parse formula
-     *      - Pass formula root node to Analyze(TexlNode node)
+     *      - Use PFX Engine to parse cell objects
+     *      - Pass parsed cell objects and parsed nodes to ParsedCellAnalyzer.Analyze()
+     *      - Accept function called on node
+     *      - Visitor pattern and recursion then used to convert to PowerFX equivalents
      */
 
     public class ParsedCellAnalyzer : TexlFunctionalVisitor<String, Precedence>
     {
         private ExcelParser.ParsedCell analyzedCell;
-        private bool isFunction;
+        private bool isFormula;
 
         public ParsedCellAnalyzer()
         {
-            isFunction = false;
+            isFormula = false;
         }
 
         public ParsedCellAnalyzer(ExcelParser.ParsedCell cell)
         {
-            isFunction = false;
+            isFormula = false;
             analyzedCell = cell;
         }
 
@@ -59,7 +60,14 @@ namespace ExcelConverter
 
         public override String Visit(UnaryOpNode node, Precedence context)
         {
-            return node.Op.ToString() + node.Child.Accept(this, Precedence.None);
+            if (node.Op == UnaryOp.Percent)
+            {
+                return node.Child.Accept(this, Precedence.None) + Utils.ConvertUnaryOp(node.Op);
+            }
+            else
+            {
+                return Utils.ConvertUnaryOp(node.Op) + node.Child.Accept(this, Precedence.None);
+            }
         }
 
         public override String Visit(BoolLitNode node, Precedence context)
@@ -69,31 +77,25 @@ namespace ExcelConverter
 
         public override String Visit(NumLitNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
-            {
-                return node.ActualNumValue.ToString();
-            }
-            else
-            {
-                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, node);
-            }
+            return node.ActualNumValue.ToString();
         }
 
         public override String Visit(FirstNameNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null) // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
+            if (isFormula && analyzedCell != null) // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
             {
                 return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
             }
             else // otherwise, treat it as a new String variable creation and a cell with text in it
             {
+                //return "";
                 return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, "\"" + node.Ident.Name.Value + "\"");
             }
         }
 
         public override String Visit(StrLitNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
+            if (isFormula && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
             {
                 return "\"" + node.Value + "\""; // wrap text in quotes so it is treated as literal text and not accidentally as variable
             }
@@ -105,17 +107,29 @@ namespace ExcelConverter
 
         public override String Visit(BinaryOpNode node, Precedence context)
         {
-            var binaryOpNode = (BinaryOpNode)node;
+            isFormula = true;
 
+         
+
+            String opString = Utils.ConvertBinaryOp(node.Op);
             String left = node.Left.Accept(this, Precedence.None);
             String right = node.Right.Accept(this, Precedence.None);
 
-            return left + " + " + right;
+            if (node.Left.ToString()[0] == '(')
+            {
+                left = "(" + left + ")";
+            }
+            if (node.Right.ToString()[0] == '(')
+            {
+                right = "(" + right + ")";
+            }
+
+            return left + " " + opString + " " + right;
         }
 
         public override String Visit(CallNode node, Precedence context)
         {
-            isFunction = true; // Mark this as a function so we treat values literally and don't generate generic vraibles
+            isFormula = true; // Mark this as a function so we treat values literally and don't generate generic vraibles
             ListNode funcArgs = node.Args;
             var funcName = node.Head.Name;
 
