@@ -181,7 +181,7 @@ namespace Microsoft.PowerFx.Core.Parser
                 PostBlockCommentMissingClosingError();
 
                 errors = _errors;
-             }
+            }
 
             // The top node (of the parse tree) should end up with the biggest id. We use this fact when binding.
             Contracts.Assert(node.Id == _idNext - 1);
