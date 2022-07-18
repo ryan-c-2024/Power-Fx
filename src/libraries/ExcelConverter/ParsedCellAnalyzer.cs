@@ -13,36 +13,38 @@ using Microsoft.PowerFx.Syntax;
 namespace ExcelConverter
 {
     /*
-     * 1. ParsedCellAnalyzer can extend TexlVisitor
+     * 1. ParsedCellAnalyzer extends TexlFunctionalVisitor (supports Accept returning values)
      * 2. ParsedCellAnalyzer.Analyze(string formula): use engine to parse nodes of formula
-     * 3. Analyze(TexlNode node): "general recursion" - switch on node type, process nodes, or Accept new ParsedCellAnalyzer instance in child nodes/args
+     * 3. Analyze(TexlNode node): "general recursion" - Accept new ParsedCellAnalyzer instance in child nodes/args
      * 4. ParsedCellAnalyzer: hold any object structures needed for that specific node, implement any specific functions
      *  e.g., Variable names <-> Identifier map, ranges as list of cells, calling pretty print, etc.
      *  
      *  Flow:
      *      - Parse Excel workbook
-     *      - Pass parsed cell formulas to ParsedCellAnalyzer.Analyze(string formula)
-     *      - Use PFX Engine to parse formula
-     *      - Pass formula root node to Analyze(TexlNode node)
+     *      - Use PFX Engine to parse cell objects
+     *      - Pass parsed cell objects and parsed nodes to ParsedCellAnalyzer.Analyze()
+     *      - Accept function called on node
+     *      - Visitor pattern and recursion then used to convert to PowerFX equivalents
      */
 
     public class ParsedCellAnalyzer : TexlFunctionalVisitor<String, Precedence>
     {
         private ExcelParser.ParsedCell analyzedCell;
-        private bool isFunction;
+        private bool isFormula;
 
         public ParsedCellAnalyzer()
         {
-            isFunction = false;
+            isFormula = false;
         }
 
         public ParsedCellAnalyzer(ExcelParser.ParsedCell cell)
         {
-            isFunction = false;
+            isFormula = false;
             analyzedCell = cell;
         }
 
-
+        // Parses formula passed in as a string and then converts it to PFX
+        // Wraps around Analyze(TexlNode, ParsedCell)
         public static string Analyze(string formula, ExcelParser.ParsedCell cell = null)
         {
             var engine = new Engine(new PowerFxConfig());
@@ -50,16 +52,26 @@ namespace ExcelConverter
             return Analyze(parseResult.Root, cell);
         }
 
+        // Uses the Visitor design pattern to recursively convert node to PFX, outputting String of converted output
         public static string Analyze(TexlNode node, ExcelParser.ParsedCell cell = null)
         {
             var analyzer = new ParsedCellAnalyzer(cell);
             return node.Accept(analyzer, Precedence.None);
         }
 
-
+        // Process UnaryOpNode, converting operator enum val to appropriate char and recursively processing operand
         public override String Visit(UnaryOpNode node, Precedence context)
         {
-            return node.Op.ToString() + node.Child.Accept(this, Precedence.None);
+            // If UnaryOp is a percent sign, add it after the operand
+            if (node.Op == UnaryOp.Percent)
+            {
+                return node.Child.Accept(this, Precedence.None) + Utils.ConvertUnaryOp(node.Op);
+            }
+            // Otherwise, it's a minus sign or similar and we add it beforehand
+            else
+            {
+                return Utils.ConvertUnaryOp(node.Op) + node.Child.Accept(this, Precedence.None);
+            }
         }
 
         public override String Visit(BoolLitNode node, Precedence context)
@@ -69,23 +81,18 @@ namespace ExcelConverter
 
         public override String Visit(NumLitNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
-            {
-                return node.ActualNumValue.ToString();
-            }
-            else
-            {
-                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, node);
-            }
+            return node.ActualNumValue.ToString();
         }
 
         public override String Visit(FirstNameNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null) // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
+            // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
+            if (isFormula && analyzedCell != null) 
             {
                 return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
             }
-            else // otherwise, treat it as a new String variable creation and a cell with text in it
+            // otherwise, treat it as a new String variable creation and a cell with text in it
+            else
             {
                 return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, "\"" + node.Ident.Name.Value + "\"");
             }
@@ -93,7 +100,7 @@ namespace ExcelConverter
 
         public override String Visit(StrLitNode node, Precedence context)
         {
-            if (isFunction && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
+            if (isFormula && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
             {
                 return "\"" + node.Value + "\""; // wrap text in quotes so it is treated as literal text and not accidentally as variable
             }
@@ -103,38 +110,47 @@ namespace ExcelConverter
             }
         }
 
+        // Process BinaryOpNode, converting operator's enum val to appropriate char and recursively processing both operands
         public override String Visit(BinaryOpNode node, Precedence context)
         {
-            var binaryOpNode = (BinaryOpNode)node;
+            isFormula = true;
 
+            // recurse and return converted string for left and right operands
+            // Then, add the appropriate binary op in between and return
+            String opString = Utils.ConvertBinaryOp(node.Op);
             String left = node.Left.Accept(this, Precedence.None);
             String right = node.Right.Accept(this, Precedence.None);
-
-            return left + " + " + right;
+            
+            return left + " " + opString + " " + right; 
         }
 
         public override String Visit(CallNode node, Precedence context)
         {
-            isFunction = true; // Mark this as a function so we treat values literally and don't generate generic vraibles
+            // Mark this as a formula so we convert cell references, etc properly
+            isFormula = true;
             ListNode funcArgs = node.Args;
             var funcName = node.Head.Name;
 
+            // Lowercase the function name to fit PFX style
             String adjustedFuncName = Utils.AdjustFuncName(funcName.ToString()) + "("; // convert func name to PowerFX style
             IReadOnlyList<TexlNode> children = funcArgs.ChildNodes;
 
+            // Iterate through function arguments and recursively convert them to PFX style
             TexlNode arg = children[0];
-            for (int i = 0; i < children.Count; i++) // iterate over args and append them to output string
+            for (int i = 0; i < children.Count; i++) 
             {
                 arg = children[i];
                 String append = "";
 
                 append += arg.Accept(this, Precedence.None);
 
-                if (i == (children.Count - 1)) // if only one argument or this is the last arg, close the parentheses
+                // if only one argument or this is the last arg, close the parentheses
+                if (i == (children.Count - 1)) 
                 {
                     adjustedFuncName += append + ")"; // injects arg.ToString()
                 }
-                else if (i >= 0 && i < (children.Count - 1)) // if not the last arg, add a comma and space for the next up arg
+                // if not the last arg, add a comma and space for the next up arg
+                else if (i >= 0 && i < (children.Count - 1)) 
                 {
                     adjustedFuncName += append + ", ";
                 }
@@ -154,18 +170,15 @@ namespace ExcelConverter
             throw new NotImplementedException();
         }
 
-
         public override String Visit(AsNode node, Precedence context)
         {
             return node.ToString();
         }
 
-
         public override String Visit(StrInterpNode node, Precedence context)
         {
             return node.ToString();
         }
-
 
         public override String Visit(SelfNode node, Precedence context)
         {
@@ -180,8 +193,6 @@ namespace ExcelConverter
         {
             return node.ToString();
         }
-
-
         public override String Visit(ErrorNode node, Precedence context)
         {
             return node.ToString();
