@@ -5,6 +5,8 @@ using System;
 using System.Collections.Generic;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Text.RegularExpressions;
+using DocumentFormat.OpenXml.Wordprocessing;
 using Microsoft.PowerFx;
 using Microsoft.PowerFx.Core;
 using Microsoft.PowerFx.Syntax;
@@ -89,7 +91,18 @@ namespace ExcelConverter
             // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
             if (isFormula && analyzedCell != null) 
             {
-                return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
+                // Matches preprocessed range that is not within quotes
+                Regex rx = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
+                Match match = rx.Match(node.Ident.Name.Value);
+
+                if (match.Success) // if we found a preprocessed range, return unfurled range
+                {
+                    return Utils.ExpandRange(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value));
+                }
+                else
+                {
+                    return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
+                }
             }
             // otherwise, treat it as a new String variable creation and a cell with text in it
             else
@@ -100,9 +113,10 @@ namespace ExcelConverter
 
         public override String Visit(StrLitNode node, Precedence context)
         {
-            if (isFormula && analyzedCell != null) // if number within a func call, treat it literally (temporary feature)
+            // if within a func call, wrap text in quotes so it is treated as literal text and not accidentally as variable
+            if (isFormula && analyzedCell != null) 
             {
-                return "\"" + node.Value + "\""; // wrap text in quotes so it is treated as literal text and not accidentally as variable
+                return "\"" + node.Value + "\""; 
             }
             else
             {
@@ -118,6 +132,39 @@ namespace ExcelConverter
             // recurse and return converted string for left and right operands
             // Then, add the appropriate binary op in between and return
             String opString = Utils.ConvertBinaryOp(node.Op);
+
+            // if either of the operands is a FirstNameNode (indicating it's either a cell reference or range)
+            if (node.Left.Kind == NodeKind.FirstName || node.Right.Kind == NodeKind.FirstName)
+            {
+                String leftStr, rightStr;
+                if (node.Left.Kind == NodeKind.FirstName) 
+                {
+                    leftStr = ((FirstNameNode)node.Left).Ident.Name.Value;
+                }
+                else
+                {
+                    leftStr = node.Left.Accept(this, Precedence.None);
+                }
+
+                if (node.Right.Kind == NodeKind.FirstName)
+                {
+                    rightStr = ((FirstNameNode)node.Right).Ident.Name.Value;
+                }
+                else
+                {
+                    rightStr = node.Right.Accept(this, Precedence.None);
+                }
+
+                List<String> strList = Utils.Interpolate(leftStr, rightStr, opString);
+                StringBuilder retn = new StringBuilder("");
+
+                foreach (String str in strList)
+                {
+                    retn.Append(str);
+                }
+                return retn.ToString();
+            }
+
             String left = node.Left.Accept(this, Precedence.None);
             String right = node.Right.Accept(this, Precedence.None);
             
@@ -131,8 +178,10 @@ namespace ExcelConverter
             ListNode funcArgs = node.Args;
             var funcName = node.Head.Name;
 
-            // Lowercase the function name to fit PFX style
-            String adjustedFuncName = Utils.AdjustFuncName(funcName.ToString()) + "("; // convert func name to PowerFX style
+            // First make the function name the lowercased func name to fit PFX style
+            StringBuilder adjustedFuncName = new StringBuilder(Utils.AdjustFuncName(funcName.ToString())); 
+            adjustedFuncName.Append("("); // then add opening parentheses for the arguments
+
             IReadOnlyList<TexlNode> children = funcArgs.ChildNodes;
 
             // Iterate through function arguments and recursively convert them to PFX style
@@ -140,24 +189,26 @@ namespace ExcelConverter
             for (int i = 0; i < children.Count; i++) 
             {
                 arg = children[i];
-                String append = "";
 
-                append += arg.Accept(this, Precedence.None);
+                // append represents the new portion (obtained recursively) to which to add to our return string
+                String append = arg.Accept(this, Precedence.None);
 
                 // if only one argument or this is the last arg, close the parentheses
                 if (i == (children.Count - 1)) 
                 {
-                    adjustedFuncName += append + ")"; // injects arg.ToString()
+                    adjustedFuncName.Append(append); 
+                    adjustedFuncName.Append(")");
                 }
                 // if not the last arg, add a comma and space for the next up arg
                 else if (i >= 0 && i < (children.Count - 1)) 
                 {
-                    adjustedFuncName += append + ", ";
+                    adjustedFuncName.Append(append);
+                    adjustedFuncName.Append(", ");
                 }
 
             }
 
-            return adjustedFuncName;
+            return adjustedFuncName.ToString();
         }
 
         public override String Visit(ListNode node, Precedence context)
