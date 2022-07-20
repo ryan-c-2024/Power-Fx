@@ -121,7 +121,7 @@ namespace ExcelConverter
             String left = node.Left.Accept(this, Precedence.None);
             String right = node.Right.Accept(this, Precedence.None);
             
-            return left + " " + opString + " " + right; 
+            return "(" + left + " " + opString + " " + right + ")";
         }
 
         public override String Visit(CallNode node, Precedence context)
