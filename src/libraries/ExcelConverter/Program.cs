@@ -28,13 +28,11 @@ namespace ExcelConverter
 {
     public class Converter
     {
-        // public Converter() { } // do we have to do this to access constructor from outside this file????
-
         public static void Main(string[] args)
         {
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
 
-            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
 
@@ -42,6 +40,13 @@ namespace ExcelConverter
             foreach (ExcelParser.ParsedCell c in data.Cells)
             {
                 if (c == null) continue;
+
+                if (c.Formula != null) // preprocess any ranges
+                {
+                    // regex matches any range (eg. A4:C9) that isn't within quotes
+                    Regex rx = new Regex(@"([A-Z]\d+):([A-Z]\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
+                    c.Formula = rx.Replace(c.Formula, "$1_RANGE_$2"); // Replace with eg. A4_RANGE_C9
+                }
 
                 // parse formula if there is one, otherwise parse literal value in the cell
                 ParseResult p = c.Formula == null ? engine.Parse(c.Value) : engine.Parse(c.Formula);
