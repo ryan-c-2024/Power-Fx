@@ -24,7 +24,7 @@ namespace ExcelConverter
 
         // Expands a range, outputting a string which is a comma-separated list of cells
         // Eg. ExpandRange('A', 3, 'B', 5) -> "A3, A4, A5, B3, B4, B5"
-        public static String ExpandRange(char startRangeChar, int startRangeNum, char endRangeChar, int endRangeNum)
+        public static String ExpandRange(char startRangeChar, int startRangeNum, char endRangeChar, int endRangeNum, String sheetName, String cellNum)
         {
             StringBuilder str = new StringBuilder("");
  
@@ -37,11 +37,13 @@ namespace ExcelConverter
                     // If this is the last cell to expand, skip comma separation
                     if (i == (int)endRangeChar && j == endRangeNum)
                     {
-                        str.AppendFormat("{0}{1}", (char)i, j);
+                        String newVar = GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        str.Append(newVar);
                     }
                     else
                     {
-                        str.AppendFormat("{0}{1}, ", (char)i, j);
+                        String newVar = GenerateGenericName(sheetName, $"{(char)i}{j}, ");
+                        str.Append(newVar);
                     }
                 }
             }
@@ -49,15 +51,11 @@ namespace ExcelConverter
             return str.ToString();
         }
 
-        public static List<String> Interpolate(String leftStr, String rightStr, String opString)
+        public static List<String> Interpolate(String leftStr, String rightStr, String opString, Match leftMatch, Match rightMatch, String sheetName)
         { 
             var strList = new List<String>();
 
-            Regex rx = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
-            Match leftMatch = rx.Match(leftStr);
-            Match rightMatch = rx.Match(rightStr);
-
-            if (leftMatch.Success && rightMatch.Success)
+            if (leftMatch != null && leftMatch.Success && rightMatch != null && rightMatch.Success)
             {
                 // if there is a size mismatch between the two ranges we need to throw an exception
                 char leftStartRangeChar = char.Parse(leftMatch.Groups[1].Value);
@@ -74,20 +72,23 @@ namespace ExcelConverter
                 // A1 to B2
                 int leftRangeSize = (leftEndRangeChar - leftStartRangeChar + 1) * (leftEndRangeNum - leftStartRangeNum + 1);
                 int rightRangeSize = (rightEndRangeChar - rightStartRangeChar + 1) * (rightEndRangeNum - rightStartRangeNum + 1);
-
                 if (leftRangeSize != rightRangeSize)
                 {
-                    throw (new Exception("MISMATCH BETWEEN TWO RANGE SIZES IN BINARY OPERATOR"));
+                    throw (new Exception("ERROR: MISMATCH BETWEEN TWO RANGE SIZES IN BINARY OPERATOR"));
                 }
+
 
                 int k = (int)rightStartRangeChar;
                 int l = (int)rightStartRangeNum;
-
                 for (int i = (int)leftStartRangeChar; i <= (int)leftEndRangeChar; i++)
                 {
+                    l = (int)rightStartRangeNum;
                     for (int j = leftStartRangeNum; j <= leftEndRangeNum; j++)
                     {
-                        strList.Add($"{(char)i}{j} {opString} {(char)k}{l}");
+                        String leftVar = Utils.GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        String rightVar = Utils.GenerateGenericName(sheetName, $"{(char)k}{l}");
+
+                        strList.Add($"{leftVar} {opString} {rightVar}");
                         l++;
                     }
 
@@ -95,7 +96,7 @@ namespace ExcelConverter
                 }
 
             }
-            else if (leftMatch.Success) // if left is a range, right isn't
+            else if (leftMatch != null && leftMatch.Success) // if left is a range, right isn't
             {
                 // insert code here to convert right operand to generic variable if applicable
 
@@ -110,11 +111,12 @@ namespace ExcelConverter
                 {
                     for (int j = startRangeNum; j <= endRangeNum; j++)
                     {
-                        strList.Add($"{(char)i}{j} {opString} {rightStr}");                       
+                        String newVar = Utils.GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        strList.Add($"{newVar} {opString} {rightStr}");
                     }
                 }
             }
-            else if (rightMatch.Success)
+            else if (rightMatch != null && rightMatch.Success)
             {
                 // insert code here to convert left operand to generic variable if applicable
                 int startRangeChar = char.Parse(rightMatch.Groups[1].Value);
@@ -128,7 +130,8 @@ namespace ExcelConverter
                 {
                     for (int j = startRangeNum; j <= endRangeNum; j++)
                     {
-                        strList.Add($"{leftStr} {opString} {(char)i}{j}");
+                        String newVar = Utils.GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        strList.Add($"{leftStr} {opString} {newVar}");
                     }
                 }
             }

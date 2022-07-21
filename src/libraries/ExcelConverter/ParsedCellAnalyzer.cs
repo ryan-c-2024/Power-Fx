@@ -97,7 +97,7 @@ namespace ExcelConverter
 
                 if (match.Success) // if we found a preprocessed range, return unfurled range
                 {
-                    return Utils.ExpandRange(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value));
+                    return Utils.ExpandRange(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value), analyzedCell.SheetName, analyzedCell.CellId);
                 }
                 else
                 {
@@ -107,6 +107,9 @@ namespace ExcelConverter
             // otherwise, treat it as a new String variable creation and a cell with text in it
             else
             {
+
+
+                // this is potentially INCORRECT !!!!!!!!!!!
                 return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, "\"" + node.Ident.Name.Value + "\"");
             }
         }
@@ -137,9 +140,18 @@ namespace ExcelConverter
             if (node.Left.Kind == NodeKind.FirstName || node.Right.Kind == NodeKind.FirstName)
             {
                 String leftStr, rightStr;
+                Regex rx = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
+                Match leftMatch = null, rightMatch = null;
+
                 if (node.Left.Kind == NodeKind.FirstName) 
                 {
                     leftStr = ((FirstNameNode)node.Left).Ident.Name.Value;
+                    leftMatch = rx.Match(leftStr);
+
+                    if (!leftMatch.Success) // if this is a cell, convert it 
+                    {
+                        leftStr = node.Left.Accept(this, Precedence.None);
+                    }
                 }
                 else
                 {
@@ -149,19 +161,35 @@ namespace ExcelConverter
                 if (node.Right.Kind == NodeKind.FirstName)
                 {
                     rightStr = ((FirstNameNode)node.Right).Ident.Name.Value;
+                    rightMatch = rx.Match(rightStr);
+
+                    if (!rightMatch.Success) // if this is a cell, convert it to generic var
+                    {
+                        rightStr = node.Right.Accept(this, Precedence.None);
+                    }
                 }
                 else
                 {
                     rightStr = node.Right.Accept(this, Precedence.None);
                 }
 
-                List<String> strList = Utils.Interpolate(leftStr, rightStr, opString);
+                List<String> strList = Utils.Interpolate(leftStr, rightStr, opString, leftMatch, rightMatch, analyzedCell.SheetName);
                 StringBuilder retn = new StringBuilder("");
 
-                foreach (String str in strList)
+                for (int i = 0; i < strList.Count; i++)
                 {
-                    retn.Append(str);
+                    if (i == (strList.Count - 1))
+                    {
+                        retn.Append(strList[i]);
+                    }
+                    // if not the last item, add a comma and space for the next up arg
+                    else
+                    {
+                        retn.Append(strList[i]);
+                        retn.Append(", ");
+                    }
                 }
+
                 return retn.ToString();
             }
 
