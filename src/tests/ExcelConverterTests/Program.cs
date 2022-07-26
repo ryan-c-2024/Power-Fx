@@ -50,29 +50,29 @@ namespace ExcelConverterTests
             var recalc = new RecalcEngine();
             var engine = new Engine(new PowerFxConfig());
 
-            var pfxValue = recalc.Eval(Utils.ProcessFunc("ABS(-123)", engine));
+            var pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("ABS(-123)"));
             Assert.Equal("123", pfxValue.ToObject().ToString());
 
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ACOS(-1)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("ACOS(-1)"));
             decimal roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("3.14", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ACOT(-1)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("ACOT(-1)"));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("2.36", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("AND(1=1, 0=0)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("AND(1=1, 0=0)"));
             Assert.Equal("True", pfxValue.ToObject().ToString());
 
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ASIN(-1)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("ASIN(-1)"));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("-1.57", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ATAN(-1)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("ATAN(-1)"));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("-0.79", roundedDecimal.ToString());
 
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("ATAN2(1, -1)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("ATAN2(1, -1)"));
             roundedDecimal = Math.Round(Convert.ToDecimal(pfxValue.ToObject().ToString()), 2);
             Assert.Equal("-0.79", roundedDecimal.ToString());
         }
@@ -83,15 +83,15 @@ namespace ExcelConverterTests
             var recalc = new RecalcEngine();
             var engine = new Engine(new PowerFxConfig());
 
-            var pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("DAY(DATE(2022, 6, 13))", engine));
+            var pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("DAY(DATE(2022, 6, 13))"));
             Assert.Equal("13", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("YEAR(DATE(2022,6,13))", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("YEAR(DATE(2022,6,13))"));
             Assert.Equal("2022", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("SUM(1,SUM(1,2))", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("SUM(1,SUM(1,2))"));
             Assert.Equal("4", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("SUM(SUM(1,2), 1)", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("SUM(SUM(1,2), 1)"));
             Assert.Equal("4", pfxValue.ToObject().ToString());
-            pfxValue = recalc.Eval(ExcelConverter.Utils.ProcessFunc("SUM(1,SUM(SUM(SUM(4,6),SUM(5,9)),2))", engine));
+            pfxValue = recalc.Eval(ParsedCellAnalyzer.Analyze("SUM(1,SUM(SUM(SUM(4,6),SUM(5,9)),2))"));
             Assert.Equal("27", pfxValue.ToObject().ToString());
         }
 

@@ -31,6 +31,7 @@ namespace ExcelConverter
         public static void Main(string[] args)
         {
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
+            // Also, sometimes ExcelConverter doesn't run past ParseSpreadsheet for some reason
 
             ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();

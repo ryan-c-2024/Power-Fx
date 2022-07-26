@@ -51,7 +51,8 @@ namespace ExcelConverter
         public static string Analyze(string formula, ExcelParser.ParsedCell cell = null)
         {
             var engine = new Engine(new PowerFxConfig());
-            var parseResult = engine.Parse(formula);
+            String updatedFormula = Utils.ReformatRange(formula); // If formula has a range, preprocess and reformat it
+            var parseResult = engine.Parse(updatedFormula);
             return Analyze(parseResult.Root, cell);
         }
 
