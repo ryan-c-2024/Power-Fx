@@ -33,10 +33,11 @@ namespace ExcelConverter
     {
         private ExcelParser.ParsedCell analyzedCell;
         private bool isFormula;
-
+        private bool hasFuncBeenCalled;
         public ParsedCellAnalyzer()
         {
             isFormula = false;
+            hasFuncBeenCalled = false;
         }
 
         public ParsedCellAnalyzer(ExcelParser.ParsedCell cell)
@@ -64,6 +65,7 @@ namespace ExcelConverter
         // Process UnaryOpNode, converting operator enum val to appropriate char and recursively processing operand
         public override String Visit(UnaryOpNode node, Precedence context)
         {
+            isFormula = true;
             // If UnaryOp is a percent sign, add it after the operand
             if (node.Op == UnaryOp.Percent)
             {
@@ -91,24 +93,27 @@ namespace ExcelConverter
             // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
             if (isFormula && analyzedCell != null) 
             {
+                // C8, c8_range_d9
                 // Matches preprocessed range that is not within quotes
-                Regex rx = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
-                Match match = rx.Match(node.Ident.Name.Value);
+                // wrap the regex
+                // TryGetMatch (has out parameters which is a match, return bool)
+                // #1 thing to do at the get go is to optimize for maintainability
+                Match match;
+                bool matchNonNull = Utils.TryGetRangeMatch(node, out match);
 
-                if (match.Success) // if we found a preprocessed range, return unfurled range
+                if (matchNonNull) // if we found a preprocessed range, return unfurled range
                 {
-                    return Utils.ExpandRange(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value), analyzedCell.SheetName, analyzedCell.CellId);
+                   
+                    return Utils.ExpandRange(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value), analyzedCell.SheetName);
                 }
                 else
                 {
                     return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
                 }
             }
-            // otherwise, treat it as a new String variable creation and a cell with text in it
+            // otherwise, treat it as a new String variable creation for cell with just text in it
             else
             {
-
-
                 // this is potentially INCORRECT !!!!!!!!!!!
                 return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, "\"" + node.Ident.Name.Value + "\"");
             }
@@ -132,70 +137,34 @@ namespace ExcelConverter
         {
             isFormula = true;
 
+            bool withinFunc = hasFuncBeenCalled;
+
             // recurse and return converted string for left and right operands
             // Then, add the appropriate binary op in between and return
             String opString = Utils.ConvertBinaryOp(node.Op);
 
+            // If this is not within a function definition 
+            // and is just a binary op within a cell, we need to modify existing cells
+
             // if either of the operands is a FirstNameNode (indicating it's either a cell reference or range)
             if (node.Left.Kind == NodeKind.FirstName || node.Right.Kind == NodeKind.FirstName)
             {
-                String leftStr, rightStr;
-                Regex rx = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
-                Match leftMatch = null, rightMatch = null;
-
-                if (node.Left.Kind == NodeKind.FirstName) 
+                String handledRange = HandleBinaryOpRange(node, opString, withinFunc);
+                if (handledRange != null)
                 {
-                    leftStr = ((FirstNameNode)node.Left).Ident.Name.Value;
-                    leftMatch = rx.Match(leftStr);
-
-                    if (!leftMatch.Success) // if this is a cell, convert it 
-                    {
-                        leftStr = node.Left.Accept(this, Precedence.None);
-                    }
+                    return handledRange;
                 }
-                else
-                {
-                    leftStr = node.Left.Accept(this, Precedence.None);
-                }
-
-                if (node.Right.Kind == NodeKind.FirstName)
-                {
-                    rightStr = ((FirstNameNode)node.Right).Ident.Name.Value;
-                    rightMatch = rx.Match(rightStr);
-
-                    if (!rightMatch.Success) // if this is a cell, convert it to generic var
-                    {
-                        rightStr = node.Right.Accept(this, Precedence.None);
-                    }
-                }
-                else
-                {
-                    rightStr = node.Right.Accept(this, Precedence.None);
-                }
-
-                List<String> strList = Utils.Interpolate(leftStr, rightStr, opString, leftMatch, rightMatch, analyzedCell.SheetName);
-                StringBuilder retn = new StringBuilder("");
-
-                for (int i = 0; i < strList.Count; i++)
-                {
-                    if (i == (strList.Count - 1))
-                    {
-                        retn.Append(strList[i]);
-                    }
-                    // if not the last item, add a comma and space for the next up arg
-                    else
-                    {
-                        retn.Append(strList[i]);
-                        retn.Append(", ");
-                    }
-                }
-
-                return retn.ToString();
             }
 
+            // ranges not working with multiterm statements (eg. 3 + A4:C7 * 5)
+            // in this case the right string gets expanded but then the left wont be distributed
+            // to all of them but one
+            // maybe add in a check/boolean to see if its expanded range then distribute? unsure
             String left = node.Left.Accept(this, Precedence.None);
             String right = node.Right.Accept(this, Precedence.None);
             
+            // Add parentheses to correct semantics 
+            // Sort of hacky fix for parentheses being dropped during recursion
             return "(" + left + " " + opString + " " + right + ")";
         }
 
@@ -203,6 +172,7 @@ namespace ExcelConverter
         {
             // Mark this as a formula so we convert cell references, etc properly
             isFormula = true;
+            hasFuncBeenCalled = true;
             ListNode funcArgs = node.Args;
             var funcName = node.Head.Name;
 
@@ -233,10 +203,67 @@ namespace ExcelConverter
                     adjustedFuncName.Append(append);
                     adjustedFuncName.Append(", ");
                 }
-
             }
 
             return adjustedFuncName.ToString();
+        }
+
+        private String HandleBinaryOpRange(BinaryOpNode node, String opString, bool withinFunc)
+        {
+            // Identify range
+            String leftStr = node.Left.ToString(), rightStr = node.Right.ToString();
+            Match leftMatch, rightMatch;
+          
+            Utils.TryGetRangeMatch(node, leftStr, rightStr, out leftMatch, out rightMatch);
+
+            // if there are no ranges whatsoever in the expression, abort early
+            // otherwise if either left or right not a range, call the normal recursive Accept function.
+            if (!leftMatch.Success && !rightMatch.Success)
+            {
+                return null;
+            }
+            else if (!leftMatch.Success)
+            {
+                leftStr = node.Left.Accept(this, Precedence.None);
+            }
+            if (!rightMatch.Success)
+            {
+                rightStr = node.Right.Accept(this, Precedence.None);
+            }
+
+            // Construct a list of the range, interpolated with whatever binary operator
+            List<String> strList = Utils.Interpolate(leftStr, rightStr, opString, leftMatch, rightMatch, analyzedCell.SheetName);
+
+            // If this is a range operation within a new cell and NOT a function
+            // NOTE: DOESN'T WORK FOR EG. 5 + (B2:D3 * SUM(1, 2))
+            // might have to recurse and then add the result in the very end? unsure
+            if (!withinFunc && (leftMatch.Success || rightMatch.Success))
+            {
+                Utils.ProcessDynamicRange(analyzedCell, strList, leftMatch, rightMatch);
+
+                // return no to terminate processing of this cell
+                // this should prevent overwriting of processed dynamic range
+                return null; 
+            }
+
+            // Iterate through items of the output list and put together the interpolated range
+            StringBuilder retn = new StringBuilder("");
+            for (int i = 0; i < strList.Count; i++)
+            {
+                if (i == (strList.Count - 1))
+                {
+                    retn.Append(strList[i]);
+                }
+                
+                // if not the last item, add a comma and space for the next up arg
+                else
+                {
+                    retn.Append(strList[i]);
+                    retn.Append(", ");
+                }
+            }
+
+            return retn.ToString();
         }
 
         public override String Visit(ListNode node, Precedence context)
@@ -292,4 +319,54 @@ namespace ExcelConverter
             return node.ToString();
         }
     }
+}
+
+
+// Might need to add error handling in case someone passes in wrong kind of Match object?
+public struct Range
+{
+    public Range()
+    {
+        // assign placeholder values in generic constructor
+        startChar = 'a';
+        endChar = 'a';
+        startNum = 0;
+        endNum = 0;
+    }
+
+    // Initiate range object from total range match object
+    // ie. match for A3_RANGE_C9 should be the input here, not any other kind of match
+    public Range(Match match)
+    {
+        if (match.Success)
+        {
+            startChar = char.Parse(match.Groups[1].Value);
+            endChar = char.Parse(match.Groups[3].Value);
+            startNum = int.Parse(match.Groups[2].Value);
+            endNum = int.Parse(match.Groups[4].Value);
+        }
+        else
+        {
+            startChar = 'a';
+            endChar = 'a';
+            startNum = 0;
+            endNum = 0;
+        }
+    }
+
+    public void InitFromMatch(Match match)
+    {
+        if (match.Success)
+        {
+            startChar = char.Parse(match.Groups[1].Value);
+            endChar = char.Parse(match.Groups[3].Value);
+            startNum = int.Parse(match.Groups[2].Value);
+            endNum = int.Parse(match.Groups[4].Value);
+        }
+    }
+
+    public char startChar;
+    public char endChar;
+    public int startNum;
+    public int endNum;
 }

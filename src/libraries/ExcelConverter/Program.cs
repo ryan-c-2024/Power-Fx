@@ -39,26 +39,40 @@ namespace ExcelConverter
             // Iterate through all parsed cells and convert to PFX if applicable            
             foreach (ExcelParser.ParsedCell c in data.Cells)
             {
-                if (c == null) continue;
+                if (c == null || processedSet.Contains(c.CellId)) continue;
 
-                if (c.Formula != null) // preprocess any ranges
+                ParseResult p;
+                if (c.Formula != null) 
                 {
-                    // regex matches any range (eg. A4:C9) that isn't within quotes
-                    Regex rx = new Regex(@"([A-Z]\d+):([A-Z]\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
-                    c.Formula = rx.Replace(c.Formula, "$1_RANGE_$2"); // Replace with eg. A4_RANGE_C9
+                    c.Formula = Utils.ReformatRange(c.Formula); // If formula has a range, preprocess and reformat it
+                    p = engine.Parse(c.Formula);
                 }
-
-                // parse formula if there is one, otherwise parse literal value in the cell
-                ParseResult p = c.Formula == null ? engine.Parse(c.Value) : engine.Parse(c.Formula);
+                else
+                {
+                    p = engine.Parse(c.Value);
+                }
                 
                 // only want to run PFX conversion if either a formula or a literal number node
                 if (c.Formula != null || p.Root.Kind == NodeKind.NumLit) 
                 {
+                    // Convert to PFX then add it to our output list
                     String result = ParsedCellAnalyzer.Analyze(p.Root, c);
-                    Console.WriteLine(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
+
+                    if (!processedSet.Contains(c.CellId))
+                    {
+                        outputList.Add(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
+                    }
+                    processedSet.Add(c.CellId);
                 }
+            }
+
+            foreach (String converted in outputList)
+            {
+                Console.WriteLine(converted);
             }
         }
 
+        public static List<String> outputList = new List<String>();
+        public static HashSet<String> processedSet = new HashSet<String>();
     }
 }
