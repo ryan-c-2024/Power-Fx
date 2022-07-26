@@ -33,9 +33,19 @@ namespace ExcelConverter
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
             // Also, sometimes ExcelConverter doesn't run past ParseSpreadsheet for some reason
 
-            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
             Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
+
+            foreach (ExcelParser.ParsedDefinedNames d in data.DefinedNames)
+            {
+                // Parse defined name to get the generic name (sheetname_cellnum) it corresponds to
+                //Console.WriteLine(d.Name);
+                //Console.WriteLine(d.Value);
+                String parsedGenericName = Utils.ParseDefinedName(d);
+                definedNamesMap.Add(parsedGenericName, d.Name); // Add to our map
+            }
+
 
             // Iterate through all parsed cells and convert to PFX if applicable            
             foreach (ExcelParser.ParsedCell c in data.Cells)
@@ -43,6 +53,7 @@ namespace ExcelConverter
                 if (c == null || processedSet.Contains(c.CellId)) continue;
 
                 ParseResult p;
+
                 if (c.Formula != null) 
                 {
                     c.Formula = Utils.ReformatRange(c.Formula); // If formula has a range, preprocess and reformat it
@@ -75,5 +86,9 @@ namespace ExcelConverter
 
         public static List<String> outputList = new List<String>();
         public static HashSet<String> processedSet = new HashSet<String>();
+
+        // Maps generic variable names (String) to the defined name (String)
+        // eg. Sheet1_C8 -> MyVariable
+        public static Dictionary<String, String> definedNamesMap = new Dictionary<String, String>();
     }
 }

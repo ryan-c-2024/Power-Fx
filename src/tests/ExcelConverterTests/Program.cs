@@ -35,13 +35,13 @@ namespace ExcelConverterTests
         [Fact]
         public void GenerateNameTests()
         {
-            Assert.Equal("", ExcelConverter.Utils.GenerateGenericName("", ""));
-            Assert.Equal("", ExcelConverter.Utils.GenerateGenericName(null, null));
-            Assert.Equal("Sheet1_A1", ExcelConverter.Utils.GenerateGenericName("Sheet1", "A1"));
-            Assert.Equal("TestSheet_E10", ExcelConverter.Utils.GenerateGenericName("TestSheet", "E10"));
-            Assert.Equal("Balances_B5", ExcelConverter.Utils.GenerateGenericName("Balances", "B5"));
-            Assert.Equal("Sheet1380_F4", ExcelConverter.Utils.GenerateGenericName("Sheet1380", "F4"));
-            Assert.Equal("ThisIsAReallyLongSheetname_Z35", ExcelConverter.Utils.GenerateGenericName("ThisIsAReallyLongSheetname", "Z35"));
+            Assert.Equal("", ExcelConverter.Utils.GenerateName("", ""));
+            Assert.Equal("", ExcelConverter.Utils.GenerateName(null, null));
+            Assert.Equal("Sheet1_A1", ExcelConverter.Utils.GenerateName("Sheet1", "A1"));
+            Assert.Equal("TestSheet_E10", ExcelConverter.Utils.GenerateName("TestSheet", "E10"));
+            Assert.Equal("Balances_B5", ExcelConverter.Utils.GenerateName("Balances", "B5"));
+            Assert.Equal("Sheet1380_F4", ExcelConverter.Utils.GenerateName("Sheet1380", "F4"));
+            Assert.Equal("ThisIsAReallyLongSheetname_Z35", ExcelConverter.Utils.GenerateName("ThisIsAReallyLongSheetname", "Z35"));
         }
 
         [Fact]

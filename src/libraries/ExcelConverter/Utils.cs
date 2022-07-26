@@ -39,12 +39,12 @@ namespace ExcelConverter
                     // If this is the last cell to expand, skip comma separation
                     if (i == (int)rangeEndChar && j == rangeEndNum)
                     {
-                        String newVar = GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        String newVar = GenerateName(sheetName, $"{(char)i}{j}");
                         str.Append(newVar);
                     }
                     else
                     {
-                        String newVar = GenerateGenericName(sheetName, $"{(char)i}{j}, ");
+                        String newVar = GenerateName(sheetName, $"{(char)i}{j}, ");
                         str.Append(newVar);
                     }
                 }
@@ -88,8 +88,8 @@ namespace ExcelConverter
                     {
                         // Have two matching cells from the expanded range, then
                         // make each cell pair into variable names for PowerFX compatibility
-                        String leftVar = Utils.GenerateGenericName(sheetName, $"{(char)i}{j}");
-                        String rightVar = Utils.GenerateGenericName(sheetName, $"{(char)k}{l}");
+                        String leftVar = Utils.GenerateName(sheetName, $"{(char)i}{j}");
+                        String rightVar = Utils.GenerateName(sheetName, $"{(char)k}{l}");
 
                         // Interpolate with the original operator used for 
                         strList.Add($"{leftVar} {opString} {rightVar}");
@@ -110,7 +110,7 @@ namespace ExcelConverter
                 {
                     for (int j = range.startNum; j <= range.endNum; j++)
                     {
-                        String newVar = Utils.GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        String newVar = Utils.GenerateName(sheetName, $"{(char)i}{j}");
                         strList.Add($"{newVar} {opString} {rightStr}");
                     }
                 }
@@ -125,7 +125,7 @@ namespace ExcelConverter
                 {
                     for (int j = range.startNum; j <= range.endNum; j++)
                     {
-                        String newVar = Utils.GenerateGenericName(sheetName, $"{(char)i}{j}");
+                        String newVar = Utils.GenerateName(sheetName, $"{(char)i}{j}");
                         strList.Add($"{leftStr} {opString} {newVar}");
                     }
                 }
@@ -172,8 +172,8 @@ namespace ExcelConverter
 
         public static String CreateVariable(String sheetName, String cellNum, String variableValue)
         {
-            String genericName = GenerateGenericName(sheetName, cellNum);
-            return genericName + " = " + variableValue;
+            String varName = GenerateName(sheetName, cellNum);
+            return varName + " = " + variableValue;
         }
 
         public static String CreateVariable(String sheetName, String cellNum, TexlNode node)
@@ -181,14 +181,32 @@ namespace ExcelConverter
             return CreateVariable(sheetName, cellNum, node.ToString());
         }
 
-        // Takes sheet name and cell number and creates a generic default PowerFX variable name for it
+        // Generate the generic PowerFX default varuabke name (eg. "sheet1_C8") for a given sheetName and cell
         // Eg. Cell B2 on Sheet1 -> Sheet1_B2
-        // QUESTION: Should we keep the first letter of the variable uppercase at all times? lowercase? or base it on sheet name casing
-        public static String GenerateGenericName(String sheetName, String cellNum)
+        // If we have a defined name established for this in our map, we use that instead
+        public static String GenerateName(String sheetName, String cellNum)
         {
             if (sheetName == null || sheetName == "" || cellNum == null || cellNum == "") return "";
-            String output = RemoveAllWhitespace(sheetName) + "_" + cellNum;
-            return output;
+
+            // If a defined name "eg. Variable1" was passed in for cellNum, return it immediately
+            if (Converter.definedNamesMap.ContainsValue(cellNum)) return cellNum;
+
+
+            String genericName = RemoveAllWhitespace(sheetName) + "_" + cellNum;
+            String definedName = null;
+
+            // automatically corrects all references to a defined name to the actual defined name
+            // Not sure if this is the behavior we are going for
+            // eg. Sheet1_C8 is assigned the variable name Variable1. If Sheet1_C8 is referenced in a formula,
+            // we will output Variable1 instead
+            if (Converter.definedNamesMap.TryGetValue(genericName, out definedName))
+            {
+                return definedName;
+            }
+            else
+            {
+                return genericName;
+            }
         }
 
         public static String RemoveAllWhitespace(String text)
@@ -261,12 +279,27 @@ namespace ExcelConverter
             return matchOut.Success;
         }
 
+        // Takes in a defined name object and extracts the sheet and cell that it corresponds to
+        public static String ParseDefinedName(ExcelParser.ParsedDefinedNames definedName)
+        {
+            Match match = definedNameRegex.Match(definedName.Value);
+
+            if (!match.Success) return null;
+
+            String sheetName = match.Groups[2].Value;
+            String cellId = match.Groups[4].Value + match.Groups[5].Value;
+            return GenerateName(sheetName, cellId);
+        }
+
         // regex that detects a A3:C7 style range, ignoring if it is within quotes
         private static Regex colonRangeRegex = new Regex(@"([A-Z]\d+):([A-Z]\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
 
         private static Regex parsedRangeRegex = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
 
         private static Regex currCellRegex = new Regex(@"([A-Z])(\d+)");
+
+        private static Regex definedNameRegex = new Regex(@"(['']?)([^'']+)(['']?)!\$([A-Z])\$(\d+)");
+
 
         private static Dictionary<BinaryOp, String> binaryOpMap = new Dictionary<BinaryOp, String>()
             {

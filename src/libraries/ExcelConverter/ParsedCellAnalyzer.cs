@@ -94,22 +94,20 @@ namespace ExcelConverter
             // if FirstName within a func call, treat as cell reference and convert to generically named var (temporary feature)
             if (isFormula && analyzedCell != null) 
             {
-                // C8, c8_range_d9
-                // Matches preprocessed range that is not within quotes
-                // wrap the regex
-                // TryGetMatch (has out parameters which is a match, return bool)
                 // #1 thing to do at the get go is to optimize for maintainability
                 Match match;
-                bool matchNonNull = Utils.TryGetRangeMatch(node, out match);
 
-                if (matchNonNull) // if we found a preprocessed range, return unfurled range
+                if (Utils.TryGetRangeMatch(node, out match)) // if we found a preprocessed range, return unfurled range
                 {
                    
                     return Utils.ExpandRange(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value), analyzedCell.SheetName);
                 }
-                else
+                else 
                 {
-                    return Utils.GenerateGenericName(analyzedCell.SheetName, node.Ident.Name.Value);
+                    // Generate the generic name (eg. "sheet1_C8") for the given sheetName and cell
+                    // If we have a defined name established for this in our map, we use that instead
+
+                    return Utils.GenerateName(analyzedCell.SheetName, node.Ident.Name.Value);
                 }
             }
             // otherwise, treat it as a new String variable creation for cell with just text in it
