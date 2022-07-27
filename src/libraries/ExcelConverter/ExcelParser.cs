@@ -88,7 +88,7 @@ namespace ExcelConverter
                         Console.WriteLine(sheet.Name);
 
                         SheetData sheetData = workSheet.Elements<SheetData>().First();
-                        SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();
+                        SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();    
 
                         var sharedFormulas = new Dictionary<uint, SharedFormula>();
 
@@ -99,7 +99,6 @@ namespace ExcelConverter
                             {
                                 ParsedCell parsedCell = ParseCell(sheet.Name?.Value, cell, sharedStringTable, sharedFormulas, includeCellValues);
 
-                                //Console.WriteLine("    " + JsonConvert.SerializeObject(parsedCell));
                                 jsonRows.Add(parsedCell);
                             }
                         }
@@ -136,7 +135,6 @@ namespace ExcelConverter
                     {
                         foreach (DefinedName dn in definedNames)
                             jsonNames.Add(new ParsedDefinedNames { Name = dn.Name.Value, Value = dn.Text });
-                        //Console.WriteLine("{0} {1}", dn.Name.Value, dn.Text);
                     }
 
                     // does this result in copying of the whole object?
