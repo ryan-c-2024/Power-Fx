@@ -312,6 +312,11 @@ namespace ExcelConverter
             return cell1 + "_RANGE_" + cell2;
         }
 
+        public static String QuoteWrap(String input)
+        {
+            return "\"" + input + "\"";
+        }
+
         // regex that detects a A3:C7 style range, ignoring if it is within quotes
         private static Regex colonRangeRegex = new Regex(@"([A-Z]\d+):([A-Z]\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
 

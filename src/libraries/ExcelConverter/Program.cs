@@ -34,12 +34,12 @@ namespace ExcelConverter
             // Also, sometimes ExcelConverter doesn't run past ParseSpreadsheet for some reason
 
             ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
-            Converter conv = new Converter();
             var engine = new Engine(new PowerFxConfig());
 
             foreach (ExcelParser.ParsedDefinedNames d in data.DefinedNames)
             {
                 // Parse defined name to get the generic name (sheetname_cellnum) it corresponds to
+                // If it's not a named cell, it's a named range...
                 String parsedGenericName = Utils.ParseDefinedName(d);
                 if (parsedGenericName != null)
                 {
@@ -65,7 +65,9 @@ namespace ExcelConverter
 
                 if (c.Formula != null) 
                 {
-                    c.Formula = Utils.ReformatRange(c.Formula); // If formula has a range, preprocess and reformat it
+                    // If formula has a range, preprocess and reformat it
+                    // Otherwise, the engine parser gets tripped up by the range colon
+                    c.Formula = Utils.ReformatRange(c.Formula); 
                     p = engine.Parse(c.Formula);
                 }
                 else
@@ -74,6 +76,7 @@ namespace ExcelConverter
                 }
                 
                 // only want to run PFX conversion if either a formula or a literal number node
+                // Currently not converting StringLits because it often spams output with non-formula related cells
                 if (c.Formula != null || p.Root.Kind == NodeKind.NumLit) 
                 {
                     // Convert to PFX then add it to our output list

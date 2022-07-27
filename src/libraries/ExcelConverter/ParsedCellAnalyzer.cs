@@ -114,7 +114,7 @@ namespace ExcelConverter
             else
             {
                 // this is potentially INCORRECT !!!!!!!!!!!
-                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, "\"" + node.Ident.Name.Value + "\"");
+                return Utils.CreateVariable(analyzedCell.SheetName, analyzedCell.CellId, Utils.QuoteWrap(node.Ident.Name.Value));
             }
         }
 
@@ -123,7 +123,7 @@ namespace ExcelConverter
             // if within a func call, wrap text in quotes so it is treated as literal text and not accidentally as variable
             if (isFormula && analyzedCell != null) 
             {
-                return "\"" + node.Value + "\""; 
+                return Utils.QuoteWrap(node.Value);
             }
             else
             {
@@ -217,11 +217,9 @@ namespace ExcelConverter
 
             // if there are no ranges whatsoever in the expression, abort early
             // otherwise if either left or right not a range, call the normal recursive Accept function.
-            if (!leftMatch.Success && !rightMatch.Success)
-            {
-                return null;
-            }
-            else if (!leftMatch.Success)
+            if (!leftMatch.Success && !rightMatch.Success) return null;
+            
+            if (!leftMatch.Success)
             {
                 leftStr = node.Left.Accept(this, Precedence.None);
             }
