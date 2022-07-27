@@ -189,14 +189,13 @@ namespace ExcelConverter
             if (sheetName == null || sheetName == "" || cellNum == null || cellNum == "") return "";
 
             // If a defined name "eg. Variable1" was passed in for cellNum, return it immediately
+            // Note: potentially inefficient time complexity?
             if (Converter.definedNamesMap.ContainsValue(cellNum)) return cellNum;
-
 
             String genericName = RemoveAllWhitespace(sheetName) + "_" + cellNum;
             String definedName = null;
 
-            // automatically corrects all references to a defined name to the actual defined name
-            // Not sure if this is the behavior we are going for
+            // Automatically correct all references to a defined name's cell to the actual defined name
             // eg. Sheet1_C8 is assigned the variable name Variable1. If Sheet1_C8 is referenced in a formula,
             // we will output Variable1 instead
             if (Converter.definedNamesMap.TryGetValue(genericName, out definedName))
@@ -258,7 +257,12 @@ namespace ExcelConverter
         // Looking for A3_RANGE_C8 style pattern that is NOT in quotes
         public static bool TryGetRangeMatch(FirstNameNode node, out Match matchOutput)
         {
-            matchOutput = parsedRangeRegex.Match(node.Ident.Name.Value);
+            // By default rangeString is the text/name of the firstNameNode
+            // If we recognize rangeString as a defined range, then we sub in the A3_RANGE_C8 style pattern
+            String rangeString = node.Ident.Name.Value;
+            if (Converter.definedRangesMap.ContainsKey(node.Ident.Name.Value)) rangeString = Converter.definedRangesMap[node.Ident.Name.Value];
+
+            matchOutput = parsedRangeRegex.Match(rangeString);
             return matchOutput.Success;
         }
 
@@ -267,6 +271,10 @@ namespace ExcelConverter
         // Looking for A3_RANGE_C8 style pattern that is NOT in quotes
         public static bool TryGetRangeMatch(BinaryOpNode node, String leftStr, String rightStr, out Match matchOutLeft, out Match matchOutRight)
         {
+            // If we recognize leftStr/rightStr as a defined range, then sub in the A3_RANGE_C8 style pattern
+            if (Converter.definedRangesMap.ContainsKey(leftStr)) leftStr = Converter.definedRangesMap[leftStr];
+            if (Converter.definedRangesMap.ContainsKey(rightStr)) rightStr = Converter.definedRangesMap[rightStr];
+
             matchOutLeft = parsedRangeRegex.Match(leftStr);
             matchOutRight = parsedRangeRegex.Match(rightStr);
 
@@ -291,6 +299,19 @@ namespace ExcelConverter
             return GenerateName(sheetName, cellId);
         }
 
+        // Takes in a definedName representing a range and extracts range information
+        // However, does NOT RETURN SHEET DATA
+        public static String ParseDefinedRange(ExcelParser.ParsedDefinedNames definedRange)
+        {
+            Match match = definedRangeRegex.Match(definedRange.Value);
+
+            if (!match.Success) return null;
+
+            String cell1 = match.Groups[4].Value + match.Groups[5].Value;
+            String cell2 = match.Groups[6].Value + match.Groups[7].Value;
+            return cell1 + "_RANGE_" + cell2;
+        }
+
         // regex that detects a A3:C7 style range, ignoring if it is within quotes
         private static Regex colonRangeRegex = new Regex(@"([A-Z]\d+):([A-Z]\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
 
@@ -298,8 +319,9 @@ namespace ExcelConverter
 
         private static Regex currCellRegex = new Regex(@"([A-Z])(\d+)");
 
-        private static Regex definedNameRegex = new Regex(@"(['']?)([^'']+)(['']?)!\$([A-Z])\$(\d+)");
+        private static Regex definedNameRegex = new Regex(@"(['']?)([^'']+)(['']?)!\$([A-Z])\$(\d+)(?!.)");
 
+        private static Regex definedRangeRegex = new Regex(@"(['']?)([^'']+)(['']?)!\$([A-Z])\$(\d+):\$([A-Z])\$(\d+)");
 
         private static Dictionary<BinaryOp, String> binaryOpMap = new Dictionary<BinaryOp, String>()
             {

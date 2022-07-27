@@ -40,10 +40,19 @@ namespace ExcelConverter
             foreach (ExcelParser.ParsedDefinedNames d in data.DefinedNames)
             {
                 // Parse defined name to get the generic name (sheetname_cellnum) it corresponds to
-                //Console.WriteLine(d.Name);
-                //Console.WriteLine(d.Value);
                 String parsedGenericName = Utils.ParseDefinedName(d);
-                definedNamesMap.Add(parsedGenericName, d.Name); // Add to our map
+                if (parsedGenericName != null)
+                {
+                    definedNamesMap.Add(parsedGenericName, d.Name); // Add to our map
+                }
+                else
+                {
+                    // Add range data to our map so we can convert the DefinedRange to a A3_RANGE_C9 style object
+                    // In the current implementation a defined range ends up decomposed into its constituents when converted to PowerFX
+                    // Eg. SUM(definedRange1) -> (eventually ...) -> Sum(Sheet1_C3, Sheet1_C4, ..., Sheet1_D9)
+                    String parsedDefinedRange = Utils.ParseDefinedRange(d);
+                    definedRangesMap.Add(d.Name, parsedDefinedRange);
+                }
             }
 
 
@@ -90,5 +99,9 @@ namespace ExcelConverter
         // Maps generic variable names (String) to the defined name (String)
         // eg. Sheet1_C8 -> MyVariable
         public static Dictionary<String, String> definedNamesMap = new Dictionary<String, String>();
+
+        // Maps range defined name (String) to the parsed range object (String)
+        // eg. MyRange1 -> A3_RANGE_C9
+        public static Dictionary<String, String> definedRangesMap = new Dictionary<String, String>();
     }
 }
