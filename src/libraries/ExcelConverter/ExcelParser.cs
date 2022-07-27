@@ -66,108 +66,89 @@ namespace ExcelConverter
             public string Value;
         }
 
-        public static ParsedExcelData ParseSpreadsheet(MemoryStream fileStream, bool outputFile = true)
-        {
-            ParsedExcelData result;
-            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(fileStream, false))
-            {
-                result = ParseSpreadSheetInternal(spreadsheetDocument, outputFile, "from-stream");
-            }
-
-            return result;
-        }
 
         public static ParsedExcelData ParseSpreadsheet(String excelFilePath, bool outputFile = true)
         {
+            bool includeCellValues = true;
+
             string fileName = new FileInfo(excelFilePath).Name;
-            ParsedExcelData result;
+
             using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(excelFilePath, false))
             {
-                result = ParseSpreadSheetInternal(spreadsheetDocument, outputFile, fileName);
-            }
+                var sheets = new Dictionary<string, Sheet>(spreadsheetDocument.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Select(s => new KeyValuePair<string, Sheet>(s.Id.Value, s)));
 
-            return result;
-        }
+                var jsonRows = new List<ParsedCell>();
+                List<ParsedTable> jsonTables = new List<ParsedTable>();
 
-        private static ParsedExcelData ParseSpreadSheetInternal(SpreadsheetDocument spreadsheetDocument, bool outputFile = true, string outputFileName = "")
-        {
-            bool includeCellValues = true;
-            var sheets = new Dictionary<string, Sheet>(spreadsheetDocument.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Select(s => new KeyValuePair<string, Sheet>(s.Id.Value, s)));
-
-            var jsonRows = new List<ParsedCell>();
-            List<ParsedTable> jsonTables = new List<ParsedTable>();
-
-            foreach (var workSheetPartInfo in spreadsheetDocument.WorkbookPart.Parts.Where(p => p.OpenXmlPart is WorksheetPart))
-            {
-                Sheet sheet = sheets[workSheetPartInfo.RelationshipId];
-                Worksheet workSheet = ((WorksheetPart)workSheetPartInfo.OpenXmlPart).Worksheet;
-
-                Console.WriteLine(sheet.Name);
-
-                SheetData sheetData = workSheet.Elements<SheetData>().First();
-                SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();
-
-                var sharedFormulas = new Dictionary<uint, SharedFormula>();
-
-
-                foreach (Row row in sheetData.Elements<Row>())
+                foreach (var workSheetPartInfo in spreadsheetDocument.WorkbookPart.Parts.Where(p => p.OpenXmlPart is WorksheetPart))
                 {
-                    foreach (Cell cell in row.Elements<Cell>())
+                    Sheet sheet = sheets[workSheetPartInfo.RelationshipId];
+                    Worksheet workSheet = ((WorksheetPart)workSheetPartInfo.OpenXmlPart).Worksheet;
+
+                    Console.WriteLine(sheet.Name);
+
+                    SheetData sheetData = workSheet.Elements<SheetData>().First();
+                    SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();
+
+                    var sharedFormulas = new Dictionary<uint, SharedFormula>();
+
+
+                    foreach (Row row in sheetData.Elements<Row>())
                     {
-                        ParsedCell parsedCell = ParseCell(sheet.Name?.Value, cell, sharedStringTable, sharedFormulas, includeCellValues);
-
-                        //Console.WriteLine("    " + JsonConvert.SerializeObject(parsedCell));
-                        jsonRows.Add(parsedCell);
-                    }
-                }
-
-                foreach (TableDefinitionPart tablePart in ((WorksheetPart)workSheetPartInfo.OpenXmlPart).TableDefinitionParts)
-                {
-                    DocumentFormat.OpenXml.Spreadsheet.Table table = tablePart.Table; // formerly Table table = tablePart.Table  ... idk why that broke suddenly
-                    ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference };
-                    List<ParsedTableColumn> parsedColumns = new List<ParsedTableColumn>();
-
-                    foreach (TableColumn column in table.TableColumns)
-                    {
-                        if (column.CalculatedColumnFormula != null) // if the formula does not exist or is invalid don't include it (avoid exceptions)
+                        foreach (Cell cell in row.Elements<Cell>())
                         {
-                            parsedColumns.Add(new ParsedTableColumn { Name = column.Name, Formula = column.CalculatedColumnFormula.Text });
-                        }
-                        else
-                        {
-                            parsedColumns.Add(new ParsedTableColumn { Name = column.Name });
+                            ParsedCell parsedCell = ParseCell(sheet.Name?.Value, cell, sharedStringTable, sharedFormulas, includeCellValues);
+
+                            jsonRows.Add(parsedCell);
                         }
                     }
 
-                    parsedTable.Columns = parsedColumns;
-                    jsonTables.Add(parsedTable);
+                    foreach (TableDefinitionPart tablePart in ((WorksheetPart)workSheetPartInfo.OpenXmlPart).TableDefinitionParts)
+                    {
+                        DocumentFormat.OpenXml.Spreadsheet.Table table = tablePart.Table; // formerly Table table = tablePart.Table  ... idk why that broke suddenly
+                        ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference };
+                        List<ParsedTableColumn> parsedColumns = new List<ParsedTableColumn>();
+
+                        foreach (TableColumn column in table.TableColumns)
+                        {
+                            if (column.CalculatedColumnFormula != null) // if the formula does not exist or is invalid don't include it (avoid exceptions)
+                            {
+                                parsedColumns.Add(new ParsedTableColumn { Name = column.Name, Formula = column.CalculatedColumnFormula.Text });
+                            }
+                            else
+                            {
+                                parsedColumns.Add(new ParsedTableColumn { Name = column.Name });
+                            }
+                        }
+
+                        parsedTable.Columns = parsedColumns;
+                        jsonTables.Add(parsedTable);
+                    }
+
                 }
 
+                // Retrieve a reference to the defined names collection.
+                DefinedNames definedNames = spreadsheetDocument.WorkbookPart.Workbook.DefinedNames;
+                List<ParsedDefinedNames> jsonNames = new List<ParsedDefinedNames>();
+                // If there are defined names, add them to the dictionary.
+                if (definedNames != null)
+                {
+                    foreach (DefinedName dn in definedNames)
+                        jsonNames.Add(new ParsedDefinedNames { Name = dn.Name.Value, Value = dn.Text });
+                }
+
+                // does this result in copying of the whole object?
+                ParsedExcelData output = new ParsedExcelData { Cells = jsonRows, DefinedNames = jsonNames, Tables = jsonTables };
+
+                if (outputFile)
+                {
+                    string json = JsonConvert.SerializeObject(output, Newtonsoft.Json.Formatting.Indented);
+                    File.WriteAllText($"parsed-{fileName}.json", json);
+                }
+
+                return output;
             }
-
-            // Retrieve a reference to the defined names collection.
-            DefinedNames definedNames = spreadsheetDocument.WorkbookPart.Workbook.DefinedNames;
-            List<ParsedDefinedNames> jsonNames = new List<ParsedDefinedNames>();
-            // If there are defined names, add them to the dictionary.
-            if (definedNames != null)
-            {
-                foreach (DefinedName dn in definedNames)
-                    jsonNames.Add(new ParsedDefinedNames { Name = dn.Name.Value, Value = dn.Text });
-                //Console.WriteLine("{0} {1}", dn.Name.Value, dn.Text);
-            }
-
-            // does this result in copying of the whole object?
-            ParsedExcelData output = new ParsedExcelData { Cells = jsonRows, DefinedNames = jsonNames, Tables = jsonTables };
-
-            if (outputFile)
-            {
-                string json = JsonConvert.SerializeObject(output, Newtonsoft.Json.Formatting.Indented);
-                File.WriteAllText($"parsed-{outputFileName}.json", json);
-            }
-
-            return output;
         }
-
         private static ParsedCell ParseCell(string sheetName, Cell spreadSheetCell, SharedStringItem[] sharedStringTable, Dictionary<uint, SharedFormula> sharedFormulas, bool includeCellValues)
         {
             if (spreadSheetCell.CellFormula == null && (!includeCellValues || spreadSheetCell.CellValue == null))
