@@ -66,354 +66,371 @@ namespace ExcelConverter
             public string Value;
         }
 
-     
-            public static ParsedExcelData ParseSpreadsheet(String excelFilePath, bool outputFile = true)
+        public static ParsedExcelData ParseSpreadsheet(MemoryStream fileStream, bool outputFile = true)
+        {
+            ParsedExcelData result;
+            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(fileStream, false))
             {
-                bool includeCellValues = true;
-
-                string fileName = new FileInfo(excelFilePath).Name;
-
-                using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(excelFilePath, false))
-                {
-                    var sheets = new Dictionary<string, Sheet>(spreadsheetDocument.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Select(s => new KeyValuePair<string, Sheet>(s.Id.Value, s)));
-
-                    var jsonRows = new List<ParsedCell>();
-                    List<ParsedTable> jsonTables = new List<ParsedTable>();
-
-                    foreach (var workSheetPartInfo in spreadsheetDocument.WorkbookPart.Parts.Where(p => p.OpenXmlPart is WorksheetPart))
-                    {
-                        Sheet sheet = sheets[workSheetPartInfo.RelationshipId];
-                        Worksheet workSheet = ((WorksheetPart)workSheetPartInfo.OpenXmlPart).Worksheet;
-
-                        Console.WriteLine(sheet.Name);
-
-                        SheetData sheetData = workSheet.Elements<SheetData>().First();
-                        SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();
-
-                        var sharedFormulas = new Dictionary<uint, SharedFormula>();
-
-
-                        foreach (Row row in sheetData.Elements<Row>())
-                        {
-                            foreach (Cell cell in row.Elements<Cell>())
-                            {
-                                ParsedCell parsedCell = ParseCell(sheet.Name?.Value, cell, sharedStringTable, sharedFormulas, includeCellValues);
-
-                                //Console.WriteLine("    " + JsonConvert.SerializeObject(parsedCell));
-                                jsonRows.Add(parsedCell);
-                            }
-                        }
-
-                        foreach (TableDefinitionPart tablePart in ((WorksheetPart)workSheetPartInfo.OpenXmlPart).TableDefinitionParts)
-                        {
-                            DocumentFormat.OpenXml.Spreadsheet.Table table = tablePart.Table; // formerly Table table = tablePart.Table  ... idk why that broke suddenly
-                            ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference };
-                            List<ParsedTableColumn> parsedColumns = new List<ParsedTableColumn>();
-
-                            foreach (TableColumn column in table.TableColumns)
-                            {
-                                if (column.CalculatedColumnFormula != null) // if the formula does not exist or is invalid don't include it (avoid exceptions)
-                                {
-                                    parsedColumns.Add(new ParsedTableColumn { Name = column.Name, Formula = column.CalculatedColumnFormula.Text });
-                                }
-                                else
-                                {
-                                    parsedColumns.Add(new ParsedTableColumn { Name = column.Name });
-                                }
-                            }
-
-                            parsedTable.Columns = parsedColumns;
-                            jsonTables.Add(parsedTable);
-                        }
-
-                    }
-
-                    // Retrieve a reference to the defined names collection.
-                    DefinedNames definedNames = spreadsheetDocument.WorkbookPart.Workbook.DefinedNames;
-                    List<ParsedDefinedNames> jsonNames = new List<ParsedDefinedNames>();
-                    // If there are defined names, add them to the dictionary.
-                    if (definedNames != null)
-                    {
-                        foreach (DefinedName dn in definedNames)
-                            jsonNames.Add(new ParsedDefinedNames { Name = dn.Name.Value, Value = dn.Text });
-                        //Console.WriteLine("{0} {1}", dn.Name.Value, dn.Text);
-                    }
-
-                    // does this result in copying of the whole object?
-                    ParsedExcelData output = new ParsedExcelData { Cells = jsonRows, DefinedNames = jsonNames, Tables = jsonTables };
-
-                    if (outputFile)
-                    {
-                        string json = JsonConvert.SerializeObject(output, Newtonsoft.Json.Formatting.Indented);
-                        File.WriteAllText($"parsed-{fileName}.json", json);
-                    }
-
-                    return output;
-                }
-            }
-            private static ParsedCell ParseCell(string sheetName, Cell spreadSheetCell, SharedStringItem[] sharedStringTable, Dictionary<uint, SharedFormula> sharedFormulas, bool includeCellValues)
-            {
-                if (spreadSheetCell.CellFormula == null && (!includeCellValues || spreadSheetCell.CellValue == null))
-                {
-                    // If formula and value are null, this is an empty cell (happens when cells are merged) - ignore it.
-                    // If includeCellValues == false and there no formula - also ignore.
-                    return null;
-                }
-
-                var parsedCell = new ParsedCell()
-                {
-                    SheetName = sheetName,
-                    CellId = spreadSheetCell.CellReference.Value,
-                    Formula = spreadSheetCell.CellFormula?.Text,
-                };
-
-                if (spreadSheetCell.CellFormula?.SharedIndex != null)
-                {
-                    if (spreadSheetCell.CellFormula?.Reference != null)
-                    {
-                        sharedFormulas[spreadSheetCell.CellFormula.SharedIndex.Value] = new SharedFormula(spreadSheetCell);
-                    }
-                    else
-                    {
-                        SharedFormula sharedFormula = sharedFormulas[spreadSheetCell.CellFormula.SharedIndex.Value];
-                        parsedCell.Formula = sharedFormula.ResolveFormula(new CellId(parsedCell.CellId));
-                    }
-                }
-
-                if (includeCellValues && spreadSheetCell.CellValue != null)
-                {
-                    if (spreadSheetCell.DataType != null && spreadSheetCell.DataType == CellValues.SharedString)
-                    {
-                        int sharedStringIndex;
-                        parsedCell.Value = spreadSheetCell.CellValue.TryGetInt(out sharedStringIndex) ? sharedStringTable[sharedStringIndex].InnerText : null;
-                    }
-                    else
-                    {
-                        parsedCell.Value = spreadSheetCell.CellValue.InnerText;
-                    }
-                }
-
-                return parsedCell;
+                result = ParseSpreadSheetInternal(spreadsheetDocument, outputFile, "from-stream");
             }
 
-            private sealed class SharedFormula
+            return result;
+        }
+
+        public static ParsedExcelData ParseSpreadsheet(String excelFilePath, bool outputFile = true)
+        {
+            string fileName = new FileInfo(excelFilePath).Name;
+            ParsedExcelData result;
+            using (SpreadsheetDocument spreadsheetDocument = SpreadsheetDocument.Open(excelFilePath, false))
             {
-                private readonly CellId CellId;
-                private readonly string Formula;
-                private readonly CellId RangeStart;
-                private readonly CellId RangeEnd;
-                private readonly bool Horizontal;
+                result = ParseSpreadSheetInternal(spreadsheetDocument, outputFile, fileName);
+            }
 
-                public SharedFormula(Cell cell)
+            return result;
+        }
+
+        private static ParsedExcelData ParseSpreadSheetInternal(SpreadsheetDocument spreadsheetDocument, bool outputFile = true, string outputFileName = "")
+        {
+            bool includeCellValues = true;
+            var sheets = new Dictionary<string, Sheet>(spreadsheetDocument.WorkbookPart.Workbook.Sheets.Elements<Sheet>().Select(s => new KeyValuePair<string, Sheet>(s.Id.Value, s)));
+
+            var jsonRows = new List<ParsedCell>();
+            List<ParsedTable> jsonTables = new List<ParsedTable>();
+
+            foreach (var workSheetPartInfo in spreadsheetDocument.WorkbookPart.Parts.Where(p => p.OpenXmlPart is WorksheetPart))
+            {
+                Sheet sheet = sheets[workSheetPartInfo.RelationshipId];
+                Worksheet workSheet = ((WorksheetPart)workSheetPartInfo.OpenXmlPart).Worksheet;
+
+                Console.WriteLine(sheet.Name);
+
+                SheetData sheetData = workSheet.Elements<SheetData>().First();
+                SharedStringItem[] sharedStringTable = spreadsheetDocument.WorkbookPart.SharedStringTablePart?.SharedStringTable.Elements<SharedStringItem>().ToArray();
+
+                var sharedFormulas = new Dictionary<uint, SharedFormula>();
+
+
+                foreach (Row row in sheetData.Elements<Row>())
                 {
-                    Contract.Assert(cell != null && !string.IsNullOrWhiteSpace(cell.CellReference) && !string.IsNullOrWhiteSpace(cell.CellFormula?.Text),
-                                    "cell != null && !string.IsNullOrWhiteSpace(cell.CellReference) && !string.IsNullOrWhiteSpace(cell.CellFormula?.Text)");
+                    foreach (Cell cell in row.Elements<Cell>())
+                    {
+                        ParsedCell parsedCell = ParseCell(sheet.Name?.Value, cell, sharedStringTable, sharedFormulas, includeCellValues);
 
-                    CellId = new CellId(cell.CellReference);
-                    Formula = cell.CellFormula.Text;
-
-                    string[] range = cell.CellFormula.Reference.Value.Split(':');
-                    Contract.Assert(1 <= range.Length && range.Length <= 2, "1 <= range.Length && range.Length <= 2");
-                    RangeStart = new CellId(range[0]);
-                    RangeEnd = new CellId(range.Length == 2 ? range[1] : range[0]);
-
-                    if (RangeStart.X < RangeEnd.X)
-                    {
-                        Contract.Assert(RangeStart.Y == RangeEnd.Y, "RangeStart.Y == RangeEnd.Y");
-                        Horizontal = true;
-                    }
-                    else if (RangeStart.Y < RangeEnd.Y)
-                    {
-                        Contract.Assert(RangeStart.X == RangeEnd.X, "RangeStart.X == RangeEnd.X");
-                        Horizontal = false;
-                    }
-                    else if (RangeStart.X == RangeEnd.X && RangeStart.Y == RangeEnd.Y)
-                    {
-                        Contract.Assert(range.Length == 1, "range.Length == 1");
-                        Horizontal = true;
-                    }
-                    else
-                    {
-                        Contract.Assert(false, "Invalid shared formula range");
+                        //Console.WriteLine("    " + JsonConvert.SerializeObject(parsedCell));
+                        jsonRows.Add(parsedCell);
                     }
                 }
 
-                public string ResolveFormula(CellId targetCellId)
+                foreach (TableDefinitionPart tablePart in ((WorksheetPart)workSheetPartInfo.OpenXmlPart).TableDefinitionParts)
                 {
-                    int targetOffset;
-                    if (Horizontal)
+                    DocumentFormat.OpenXml.Spreadsheet.Table table = tablePart.Table; // formerly Table table = tablePart.Table  ... idk why that broke suddenly
+                    ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference };
+                    List<ParsedTableColumn> parsedColumns = new List<ParsedTableColumn>();
+
+                    foreach (TableColumn column in table.TableColumns)
                     {
-                        Contract.Assert(targetCellId.Y == RangeStart.Y && RangeStart.X <= targetCellId.X && targetCellId.X <= RangeEnd.X,
-                                        "Horizontal: targetCellId.Y == RangeStart.Y && RangeStart.X <= targetCellId.X && targetCellId.X <= RangeEnd.X");
-                        targetOffset = targetCellId.X - CellId.X;
-                    }
-                    else
-                    {
-                        Contract.Assert(targetCellId.X == RangeStart.X && RangeStart.Y <= targetCellId.Y && targetCellId.Y <= RangeEnd.Y,
-                                        "Vertical: targetCellId.X == RangeStart.X && RangeStart.Y <= targetCellId.Y && targetCellId.Y <= RangeEnd.Y");
-                        targetOffset = targetCellId.Y - CellId.Y;
-                    }
-
-                    if (targetOffset == 0)
-                    {
-                        return Formula;
-                    }
-                    else
-                    {
-                        return ResolveFormula(Formula, targetOffset, Horizontal);
-                    }
-                }
-
-                public static string ResolveFormula(string formula, int targetOffset, bool horizontal)
-                {
-                    Contract.Assert(targetOffset > 0, "targetOffset > 0");
-
-                    Match m = Regex.Match(formula, @"(?<=^|[^A-Z])(?<cellId>[A-Z]+[0-9]+)(?=$|[^0-9])");
-                    var sb = new StringBuilder();
-                    int prevSourceIndex = 0;
-                    while (m.Success)
-                    {
-                        Contract.Assert(m.Groups["cellId"].Success, "m.Groups[\"cellId\"].Success");
-
-                        sb.Append(formula.Substring(prevSourceIndex, m.Index - prevSourceIndex));
-
-                        var templateCellId = new CellId(m.Value);
-
-                        CellId targetCellId;
-                        if (horizontal)
+                        if (column.CalculatedColumnFormula != null) // if the formula does not exist or is invalid don't include it (avoid exceptions)
                         {
-                            targetCellId = new CellId(templateCellId.X + targetOffset, templateCellId.Y);
+                            parsedColumns.Add(new ParsedTableColumn { Name = column.Name, Formula = column.CalculatedColumnFormula.Text });
                         }
                         else
                         {
-                            targetCellId = new CellId(templateCellId.X, templateCellId.Y + targetOffset);
+                            parsedColumns.Add(new ParsedTableColumn { Name = column.Name });
                         }
-
-                        sb.Append(targetCellId);
-
-                        prevSourceIndex = m.Index + m.Length;
-                        m = m.NextMatch();
                     }
 
-                    if (prevSourceIndex < formula.Length)
-                    {
-                        sb.Append(formula.Substring(prevSourceIndex, formula.Length - prevSourceIndex));
-                    }
+                    parsedTable.Columns = parsedColumns;
+                    jsonTables.Add(parsedTable);
+                }
 
-                    return sb.ToString();
+            }
+
+            // Retrieve a reference to the defined names collection.
+            DefinedNames definedNames = spreadsheetDocument.WorkbookPart.Workbook.DefinedNames;
+            List<ParsedDefinedNames> jsonNames = new List<ParsedDefinedNames>();
+            // If there are defined names, add them to the dictionary.
+            if (definedNames != null)
+            {
+                foreach (DefinedName dn in definedNames)
+                    jsonNames.Add(new ParsedDefinedNames { Name = dn.Name.Value, Value = dn.Text });
+                //Console.WriteLine("{0} {1}", dn.Name.Value, dn.Text);
+            }
+
+            // does this result in copying of the whole object?
+            ParsedExcelData output = new ParsedExcelData { Cells = jsonRows, DefinedNames = jsonNames, Tables = jsonTables };
+
+            if (outputFile)
+            {
+                string json = JsonConvert.SerializeObject(output, Newtonsoft.Json.Formatting.Indented);
+                File.WriteAllText($"parsed-{outputFileName}.json", json);
+            }
+
+            return output;
+        }
+
+        private static ParsedCell ParseCell(string sheetName, Cell spreadSheetCell, SharedStringItem[] sharedStringTable, Dictionary<uint, SharedFormula> sharedFormulas, bool includeCellValues)
+        {
+            if (spreadSheetCell.CellFormula == null && (!includeCellValues || spreadSheetCell.CellValue == null))
+            {
+                // If formula and value are null, this is an empty cell (happens when cells are merged) - ignore it.
+                // If includeCellValues == false and there no formula - also ignore.
+                return null;
+            }
+
+            var parsedCell = new ParsedCell()
+            {
+                SheetName = sheetName,
+                CellId = spreadSheetCell.CellReference.Value,
+                Formula = spreadSheetCell.CellFormula?.Text,
+            };
+
+            if (spreadSheetCell.CellFormula?.SharedIndex != null)
+            {
+                if (spreadSheetCell.CellFormula?.Reference != null)
+                {
+                    sharedFormulas[spreadSheetCell.CellFormula.SharedIndex.Value] = new SharedFormula(spreadSheetCell);
+                }
+                else
+                {
+                    SharedFormula sharedFormula = sharedFormulas[spreadSheetCell.CellFormula.SharedIndex.Value];
+                    parsedCell.Formula = sharedFormula.ResolveFormula(new CellId(parsedCell.CellId));
                 }
             }
 
-            private sealed class CellId
+            if (includeCellValues && spreadSheetCell.CellValue != null)
             {
-                const int XBase = 'Z' - 'A' + 1; // 26
-
-                public int X;
-                public int Y;
-
-                public CellId(string cellId)
+                if (spreadSheetCell.DataType != null && spreadSheetCell.DataType == CellValues.SharedString)
                 {
-                    Contract.Assert(!string.IsNullOrWhiteSpace(cellId), "!string.IsNullOrWhiteSpace(cellId)");
-
-                    int xEnd;
-                    for (xEnd = cellId.Length - 1; xEnd >= 0 && char.IsDigit(cellId[xEnd]); --xEnd) ;
-
-                    Contract.Assert(xEnd >= 0, "xEnd >= 0");
-
-                    X = X2Num(cellId.Substring(0, xEnd + 1));
-                    Y = int.Parse(cellId.Substring(xEnd + 1), CultureInfo.InvariantCulture);
+                    int sharedStringIndex;
+                    parsedCell.Value = spreadSheetCell.CellValue.TryGetInt(out sharedStringIndex) ? sharedStringTable[sharedStringIndex].InnerText : null;
                 }
-
-                public CellId(int x, int y)
+                else
                 {
-                    Contract.Assert(x >= 0 && y >= 1, "x >= 0 && y => 1");
-                    X = x;
-                    Y = y;
-                }
-
-                /// <summary>
-                /// BAB -> 1379
-                /// </summary>
-                public static int X2Num(string x)
-                {
-                    Contract.Assert(!string.IsNullOrWhiteSpace(x), "!string.IsNullOrWhiteSpace(x)");
-
-                    int numX = 0;
-                    int adjustment = 0;
-                    for (int i = x.Length - 1; i >= 0; --i)
-                    {
-                        Contract.Assert('A' <= x[i] && x[i] <= 'Z', "'A' <= x[i] && x[i] <= 'Z'");
-                        numX += (x[i] - 'A' + adjustment) * (int)Math.Pow(XBase, x.Length - i - 1);
-
-                        // This is because "A, B, ..., Y, Z, AA, AB" instead of "A, B, ..., Y, Z, BA, BB"
-                        // "BAB" = 1379 = 1 + 26 + 1352
-                        // B * Base^0 = 1 * 1 = 1
-                        // A+1 * Base^1 = 0+1 * 26 = 26
-                        // B+1 * Base^2 = 1+1 * 676 = 1352
-                        // see WorksheetXdimMath.jpg
-                        adjustment = 1;
-                    }
-
-                    Contract.Assert(numX >= 0, "numX >= 0");
-                    return numX;
-                }
-
-                /// <summary>
-                /// 1379 -> BAB
-                /// </summary>
-                public static string X2Str(int x)
-                {
-                    Contract.Assert(x >= 0, "x >= 0");
-
-                    var sb = new StringBuilder();
-
-                    while (x >= 0)
-                    {
-                        int remainder = x % XBase;
-                        sb.Insert(0, Char.ConvertFromUtf32('A' + remainder));
-                        x = x / XBase - 1; // (- 1) is because "A, B, ..., Y, Z, AA, AB" instead of "A, B, ..., Y, Z, BA, BB"
-                    }
-
-                    return sb.ToString();
-                }
-
-                public override string ToString()
-                {
-                    return $"{X2Str(X)}{Y}";
+                    parsedCell.Value = spreadSheetCell.CellValue.InnerText;
                 }
             }
 
-            private static void TestCellId()
+            return parsedCell;
+        }
+
+        private sealed class SharedFormula
+        {
+            private readonly CellId CellId;
+            private readonly string Formula;
+            private readonly CellId RangeStart;
+            private readonly CellId RangeEnd;
+            private readonly bool Horizontal;
+
+            public SharedFormula(Cell cell)
             {
-                for (int i = 0; i < 30000; ++i)
+                Contract.Assert(cell != null && !string.IsNullOrWhiteSpace(cell.CellReference) && !string.IsNullOrWhiteSpace(cell.CellFormula?.Text),
+                                "cell != null && !string.IsNullOrWhiteSpace(cell.CellReference) && !string.IsNullOrWhiteSpace(cell.CellFormula?.Text)");
+
+                CellId = new CellId(cell.CellReference);
+                Formula = cell.CellFormula.Text;
+
+                string[] range = cell.CellFormula.Reference.Value.Split(':');
+                Contract.Assert(1 <= range.Length && range.Length <= 2, "1 <= range.Length && range.Length <= 2");
+                RangeStart = new CellId(range[0]);
+                RangeEnd = new CellId(range.Length == 2 ? range[1] : range[0]);
+
+                if (RangeStart.X < RangeEnd.X)
                 {
-                    var xs = CellId.X2Str(i);
-                    var xn = CellId.X2Num(xs);
-                    var xs2 = CellId.X2Str(xn);
-
-                    // Console.WriteLine($"{i} {xs} {xn} {xs2}");
-
-                    if (xn != i)
-                    {
-                        Contract.Assert(false);
-                    }
-                    if (xs != xs2)
-                    {
-                        Contract.Assert(false);
-                    }
+                    Contract.Assert(RangeStart.Y == RangeEnd.Y, "RangeStart.Y == RangeEnd.Y");
+                    Horizontal = true;
+                }
+                else if (RangeStart.Y < RangeEnd.Y)
+                {
+                    Contract.Assert(RangeStart.X == RangeEnd.X, "RangeStart.X == RangeEnd.X");
+                    Horizontal = false;
+                }
+                else if (RangeStart.X == RangeEnd.X && RangeStart.Y == RangeEnd.Y)
+                {
+                    Contract.Assert(range.Length == 1, "range.Length == 1");
+                    Horizontal = true;
+                }
+                else
+                {
+                    Contract.Assert(false, "Invalid shared formula range");
                 }
             }
 
-            private static void TestSharedFormulaResolve()
+            public string ResolveFormula(CellId targetCellId)
             {
-                Contract.Assert(SharedFormula.ResolveFormula("1/B4-10", 2, horizontal: true) == "1/D4-10");
-                Contract.Assert(SharedFormula.ResolveFormula("1/B4-10", 2, horizontal: false) == "1/B6-10");
+                int targetOffset;
+                if (Horizontal)
+                {
+                    Contract.Assert(targetCellId.Y == RangeStart.Y && RangeStart.X <= targetCellId.X && targetCellId.X <= RangeEnd.X,
+                                    "Horizontal: targetCellId.Y == RangeStart.Y && RangeStart.X <= targetCellId.X && targetCellId.X <= RangeEnd.X");
+                    targetOffset = targetCellId.X - CellId.X;
+                }
+                else
+                {
+                    Contract.Assert(targetCellId.X == RangeStart.X && RangeStart.Y <= targetCellId.Y && targetCellId.Y <= RangeEnd.Y,
+                                    "Vertical: targetCellId.X == RangeStart.X && RangeStart.Y <= targetCellId.Y && targetCellId.Y <= RangeEnd.Y");
+                    targetOffset = targetCellId.Y - CellId.Y;
+                }
 
-                Contract.Assert(SharedFormula.ResolveFormula("1/B4-ZY1", 2, horizontal: true) == "1/D4-AAA1");
-                Contract.Assert(SharedFormula.ResolveFormula("1/B4-ZY1", 2, horizontal: false) == "1/B6-ZY3");
+                if (targetOffset == 0)
+                {
+                    return Formula;
+                }
+                else
+                {
+                    return ResolveFormula(Formula, targetOffset, Horizontal);
+                }
+            }
 
-                Contract.Assert(SharedFormula.ResolveFormula("AA1/B4-B10", 2, horizontal: true) == "AC1/D4-D10");
-                Contract.Assert(SharedFormula.ResolveFormula("AA1/B4-B10", 2, horizontal: false) == "AA3/B6-B12");
+            public static string ResolveFormula(string formula, int targetOffset, bool horizontal)
+            {
+                Contract.Assert(targetOffset > 0, "targetOffset > 0");
+
+                Match m = Regex.Match(formula, @"(?<=^|[^A-Z])(?<cellId>[A-Z]+[0-9]+)(?=$|[^0-9])");
+                var sb = new StringBuilder();
+                int prevSourceIndex = 0;
+                while (m.Success)
+                {
+                    Contract.Assert(m.Groups["cellId"].Success, "m.Groups[\"cellId\"].Success");
+
+                    sb.Append(formula.Substring(prevSourceIndex, m.Index - prevSourceIndex));
+
+                    var templateCellId = new CellId(m.Value);
+
+                    CellId targetCellId;
+                    if (horizontal)
+                    {
+                        targetCellId = new CellId(templateCellId.X + targetOffset, templateCellId.Y);
+                    }
+                    else
+                    {
+                        targetCellId = new CellId(templateCellId.X, templateCellId.Y + targetOffset);
+                    }
+
+                    sb.Append(targetCellId);
+
+                    prevSourceIndex = m.Index + m.Length;
+                    m = m.NextMatch();
+                }
+
+                if (prevSourceIndex < formula.Length)
+                {
+                    sb.Append(formula.Substring(prevSourceIndex, formula.Length - prevSourceIndex));
+                }
+
+                return sb.ToString();
             }
         }
+
+        private sealed class CellId
+        {
+            const int XBase = 'Z' - 'A' + 1; // 26
+
+            public int X;
+            public int Y;
+
+            public CellId(string cellId)
+            {
+                Contract.Assert(!string.IsNullOrWhiteSpace(cellId), "!string.IsNullOrWhiteSpace(cellId)");
+
+                int xEnd;
+                for (xEnd = cellId.Length - 1; xEnd >= 0 && char.IsDigit(cellId[xEnd]); --xEnd) ;
+
+                Contract.Assert(xEnd >= 0, "xEnd >= 0");
+
+                X = X2Num(cellId.Substring(0, xEnd + 1));
+                Y = int.Parse(cellId.Substring(xEnd + 1), CultureInfo.InvariantCulture);
+            }
+
+            public CellId(int x, int y)
+            {
+                Contract.Assert(x >= 0 && y >= 1, "x >= 0 && y => 1");
+                X = x;
+                Y = y;
+            }
+
+            /// <summary>
+            /// BAB -> 1379
+            /// </summary>
+            public static int X2Num(string x)
+            {
+                Contract.Assert(!string.IsNullOrWhiteSpace(x), "!string.IsNullOrWhiteSpace(x)");
+
+                int numX = 0;
+                int adjustment = 0;
+                for (int i = x.Length - 1; i >= 0; --i)
+                {
+                    Contract.Assert('A' <= x[i] && x[i] <= 'Z', "'A' <= x[i] && x[i] <= 'Z'");
+                    numX += (x[i] - 'A' + adjustment) * (int)Math.Pow(XBase, x.Length - i - 1);
+
+                    // This is because "A, B, ..., Y, Z, AA, AB" instead of "A, B, ..., Y, Z, BA, BB"
+                    // "BAB" = 1379 = 1 + 26 + 1352
+                    // B * Base^0 = 1 * 1 = 1
+                    // A+1 * Base^1 = 0+1 * 26 = 26
+                    // B+1 * Base^2 = 1+1 * 676 = 1352
+                    // see WorksheetXdimMath.jpg
+                    adjustment = 1;
+                }
+
+                Contract.Assert(numX >= 0, "numX >= 0");
+                return numX;
+            }
+
+            /// <summary>
+            /// 1379 -> BAB
+            /// </summary>
+            public static string X2Str(int x)
+            {
+                Contract.Assert(x >= 0, "x >= 0");
+
+                var sb = new StringBuilder();
+
+                while (x >= 0)
+                {
+                    int remainder = x % XBase;
+                    sb.Insert(0, Char.ConvertFromUtf32('A' + remainder));
+                    x = x / XBase - 1; // (- 1) is because "A, B, ..., Y, Z, AA, AB" instead of "A, B, ..., Y, Z, BA, BB"
+                }
+
+                return sb.ToString();
+            }
+
+            public override string ToString()
+            {
+                return $"{X2Str(X)}{Y}";
+            }
+        }
+
+        private static void TestCellId()
+        {
+            for (int i = 0; i < 30000; ++i)
+            {
+                var xs = CellId.X2Str(i);
+                var xn = CellId.X2Num(xs);
+                var xs2 = CellId.X2Str(xn);
+
+                // Console.WriteLine($"{i} {xs} {xn} {xs2}");
+
+                if (xn != i)
+                {
+                    Contract.Assert(false);
+                }
+                if (xs != xs2)
+                {
+                    Contract.Assert(false);
+                }
+            }
+        }
+
+        private static void TestSharedFormulaResolve()
+        {
+            Contract.Assert(SharedFormula.ResolveFormula("1/B4-10", 2, horizontal: true) == "1/D4-10");
+            Contract.Assert(SharedFormula.ResolveFormula("1/B4-10", 2, horizontal: false) == "1/B6-10");
+
+            Contract.Assert(SharedFormula.ResolveFormula("1/B4-ZY1", 2, horizontal: true) == "1/D4-AAA1");
+            Contract.Assert(SharedFormula.ResolveFormula("1/B4-ZY1", 2, horizontal: false) == "1/B6-ZY3");
+
+            Contract.Assert(SharedFormula.ResolveFormula("AA1/B4-B10", 2, horizontal: true) == "AC1/D4-D10");
+            Contract.Assert(SharedFormula.ResolveFormula("AA1/B4-B10", 2, horizontal: false) == "AA3/B6-B12");
+        }
     }
+}

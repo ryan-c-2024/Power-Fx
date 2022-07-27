@@ -26,6 +26,12 @@ using DocumentFormat.OpenXml.Drawing.Charts;
 
 namespace ExcelConverter
 {
+    public class ExcelPfxResponse
+    {
+        public string CellId { get; set; }
+        public string Formula { get; set; }
+    }
+
     public class Converter
     {
         // public Converter() { } // do we have to do this to access constructor from outside this file????
@@ -55,5 +61,50 @@ namespace ExcelConverter
             }
         }
 
+        public static List<ExcelPfxResponse> ConvertFileFormulas(MemoryStream stream)
+        {
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(stream, false);
+            return ConvertInternal(data);
+        }
+
+        public static List<ExcelPfxResponse> ConvertCellFormulas(List<ExcelParser.ParsedCell> cells)
+        {
+            ExcelParser.ParsedExcelData data = new ExcelParser.ParsedExcelData
+            {
+                Cells = cells ?? new List<ExcelParser.ParsedCell>(),
+                DefinedNames = new List<ExcelParser.ParsedDefinedNames>(),
+                Tables = new List<ExcelParser.ParsedTable>()
+            };
+
+            return ConvertInternal(data);
+        }
+
+        private static List<ExcelPfxResponse> ConvertInternal(ExcelParser.ParsedExcelData data)
+        {
+            var engine = new Engine(new PowerFxConfig());
+            var values = new List<ExcelPfxResponse>();
+
+            // Iterate through all parsed cells and convert to PFX if applicable            
+            foreach (ExcelParser.ParsedCell c in data.Cells)
+            {
+                if (c == null) continue;
+
+                // parse formula if there is one, otherwise parse literal value in the cell
+                ParseResult p = c.Formula == null ? engine.Parse(c.Value) : engine.Parse(c.Formula);
+
+                // only want to run PFX conversion if either a formula or a literal number node
+                if (c.Formula != null || p.Root.Kind == NodeKind.NumLit)
+                {
+                    String result = ParsedCellAnalyzer.Analyze(p.Root, c);
+                    values.Add(new ExcelPfxResponse
+                    {
+                        CellId = c.CellId,
+                        Formula = Utils.CreateVariable(c.SheetName, c.CellId, result.ToString())
+                    });
+                }
+            }
+
+            return values;
+        }
     }
 }
