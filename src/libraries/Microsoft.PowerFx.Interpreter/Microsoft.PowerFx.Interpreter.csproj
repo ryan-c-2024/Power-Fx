@@ -13,6 +13,7 @@
 		<PackageId>Microsoft.PowerFx.Interpreter</PackageId>
 		<Title>Microsoft Power Fx Compiler - Interpreter Target</Title>
 		<Description>The Interpreter the Power Fx compiler</Description>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 	</PropertyGroup>
 	<ItemGroup>
 	  <AdditionalFiles Include="..\..\stylecop.json" Link="stylecop.json" />

@@ -322,14 +322,14 @@ namespace ExcelConverter
 // Might need to add error handling in case someone passes in wrong kind of Match object?
 public struct Range
 {
-    public Range()
-    {
-        // assign placeholder values in generic constructor
-        startChar = 'a';
-        endChar = 'a';
-        startNum = 0;
-        endNum = 0;
-    }
+    //public Range()
+    //{
+    //    // assign placeholder values in generic constructor
+    //    startChar = 'a';
+    //    endChar = 'a';
+    //    startNum = 0;
+    //    endNum = 0;
+    //}
 
     // Initiate range object from total range match object
     // ie. match for A3_RANGE_C9 should be the input here, not any other kind of match

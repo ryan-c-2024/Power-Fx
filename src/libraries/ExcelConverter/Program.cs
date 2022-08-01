@@ -26,14 +26,80 @@ using DocumentFormat.OpenXml.Drawing.Charts;
 
 namespace ExcelConverter
 {
+    public class ExcelPfxResponse
+    {
+        public string CellId { get; set; }
+        public string Formula { get; set; }
+    }
+
     public class Converter
     {
+        public static List<ExcelPfxResponse> outputList = new List<ExcelPfxResponse>();
+        public static HashSet<String> processedSet = new HashSet<String>();
+
+        // Maps generic variable names (String) to the defined name (String)
+        // eg. Sheet1_C8 -> MyVariable
+        public static Dictionary<String, String> definedNamesMap = new Dictionary<String, String>();
+
+        // Maps range defined name (String) to the parsed range object (String)
+        // eg. MyRange1 -> A3_RANGE_C9
+        public static Dictionary<String, String> definedRangesMap = new Dictionary<String, String>();
+
         public static void Main(string[] args)
         {
+            Init();
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
             // Also, sometimes ExcelConverter doesn't run past ParseSpreadsheet for some reason
 
             ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
+            ConvertInternal(data);
+
+            foreach(ExcelPfxResponse converted in outputList)
+            {
+                Console.WriteLine(converted.Formula);
+            }
+        }
+
+        public static List<ExcelPfxResponse> ConvertFileFormulas(MemoryStream stream)
+        {
+            Init();
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(stream, false);
+            ConvertInternal(data);
+            
+            return outputList;
+
+        }
+
+        public static List<ExcelPfxResponse> ConvertCellFormulas(List<ExcelParser.ParsedCell> cells)
+        {
+            Init();
+            ExcelParser.ParsedExcelData data = new ExcelParser.ParsedExcelData
+            {
+                Cells = cells ?? new List<ExcelParser.ParsedCell>(),
+                DefinedNames = new List<ExcelParser.ParsedDefinedNames>(),
+                Tables = new List<ExcelParser.ParsedTable>()
+            };
+
+            ConvertInternal(data);
+
+            return outputList;
+        }
+
+        /// <summary>
+        /// Init structures
+        /// Temporary workaround - need to reset these instances on each call to clear previous data, in the case of these being called from a Web App for example
+        /// To address, we can update the converter to use class properties and pass an instance of the class to methods that need it.
+        /// </summary>
+        private static void Init()
+        {
+            outputList = new List<ExcelPfxResponse>();
+            processedSet = new HashSet<String>();
+            definedNamesMap = new Dictionary<String, String>();
+            definedRangesMap = new Dictionary<String, String>();
+        }
+
+        private static void ConvertInternal(ExcelParser.ParsedExcelData data)
+        {
             var engine = new Engine(new PowerFxConfig());
 
             foreach (ExcelParser.ParsedDefinedNames d in data.DefinedNames)
@@ -63,48 +129,32 @@ namespace ExcelConverter
 
                 ParseResult p;
 
-                if (c.Formula != null) 
+                if (c.Formula != null)
                 {
                     // If formula has a range, preprocess and reformat it
                     // Otherwise, the engine parser gets tripped up by the range colon
-                    c.Formula = Utils.ReformatRange(c.Formula); 
+                    c.Formula = Utils.ReformatRange(c.Formula);
                     p = engine.Parse(c.Formula);
                 }
                 else
                 {
                     p = engine.Parse(c.Value);
                 }
-                
+
                 // only want to run PFX conversion if either a formula or a literal number node
                 // Currently not converting StringLits because it often spams output with non-formula related cells
-                if (c.Formula != null || p.Root.Kind == NodeKind.NumLit) 
+                if (c.Formula != null || p.Root.Kind == NodeKind.NumLit)
                 {
                     // Convert to PFX then add it to our output list
                     String result = ParsedCellAnalyzer.Analyze(p.Root, c);
 
                     if (!processedSet.Contains(c.CellId))
                     {
-                        outputList.Add(Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()));
+                        outputList.Add(new ExcelPfxResponse { CellId = c.CellId, Formula = Utils.CreateVariable(c.SheetName, c.CellId, result.ToString()) });
                     }
                     processedSet.Add(c.CellId);
                 }
             }
-
-            foreach (String converted in outputList)
-            {
-                Console.WriteLine(converted);
-            }
         }
-
-        public static List<String> outputList = new List<String>();
-        public static HashSet<String> processedSet = new HashSet<String>();
-
-        // Maps generic variable names (String) to the defined name (String)
-        // eg. Sheet1_C8 -> MyVariable
-        public static Dictionary<String, String> definedNamesMap = new Dictionary<String, String>();
-
-        // Maps range defined name (String) to the parsed range object (String)
-        // eg. MyRange1 -> A3_RANGE_C9
-        public static Dictionary<String, String> definedRangesMap = new Dictionary<String, String>();
     }
 }
