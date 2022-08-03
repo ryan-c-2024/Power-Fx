@@ -70,14 +70,14 @@ namespace ExcelConverter
 
         }
 
-        public static List<ExcelPfxResponse> ConvertCellFormulas(List<ExcelParser.ParsedCell> cells)
+        public static List<ExcelPfxResponse> ConvertCellFormulas(ExcelParser.ParsedExcelData value)
         {
             Init();
             ExcelParser.ParsedExcelData data = new ExcelParser.ParsedExcelData
             {
-                Cells = cells ?? new List<ExcelParser.ParsedCell>(),
-                DefinedNames = new List<ExcelParser.ParsedDefinedNames>(),
-                Tables = new List<ExcelParser.ParsedTable>()
+                Cells = value.Cells ?? new List<ExcelParser.ParsedCell>(),
+                DefinedNames = value.DefinedNames ?? new List<ExcelParser.ParsedDefinedNames>(),
+                Tables = value.Tables ?? new List<ExcelParser.ParsedTable>()
             };
 
             ConvertInternal(data);
