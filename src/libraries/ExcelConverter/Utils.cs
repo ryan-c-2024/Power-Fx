@@ -4,7 +4,9 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Data.Common;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
@@ -252,6 +254,19 @@ namespace ExcelConverter
             return colonRangeRegex.Replace(input, "$1_RANGE_$2");
         }
 
+        // Takes in a range eg. "A4:C9" and returns its corresponding rang eobject
+        public static Range DecomposeRange(String strInput)
+        {
+            Match match = decomposeColonRangeRegex.Match(strInput);
+
+            if (!match.Success) return null;
+
+            Range output = new Range(char.Parse(match.Groups[1].Value), int.Parse(match.Groups[2].Value), 
+                char.Parse(match.Groups[3].Value), int.Parse(match.Groups[4].Value));
+
+            return output;
+        }
+
         // Takes in a FirstNameNode (input) and Match object (output)
         // Returns TRUE if successfully found the regex match, FALSE if not
         // Looking for A3_RANGE_C8 style pattern that is NOT in quotes
@@ -317,8 +332,180 @@ namespace ExcelConverter
             return "\"" + input + "\"";
         }
 
+        // Takes in a formula that may or may not have a reference to a table in it
+        // and converts the table reference, if there is one, to a range
+        public static String TableToRange(String formula, ExcelParser.ParsedCell cell)
+        {
+            // If external table ref regex doesn't match, we try internal table ref
+            String retn = formula;
+            if (!ExternalTableRefToRange(formula, out retn))
+            {
+                InternalTableRefToRange(formula, cell, out retn);
+            }
+         
+            // If neither of the regexes match, retn defaults to formula anyway
+            // If one of the regexes match, we return the modified result 
+            return retn;
+        }
+
+        // Takes in an external table reference (ie. a table with NO "@" reference to THIS ROW, THIS COL)
+        // Example input: SUM(Table1[[Column1]:[Column2]])
+        // If regex match is successful, converts outputs a range like "B4:C6" and returns true
+        public static bool ExternalTableRefToRange(String formula, out String output)
+        {
+            Match match = externalTableRefRegex.Match(formula);
+            output = formula;
+
+            if (!match.Success) return false;
+
+            String tableName = match.Groups[1].Value;
+            String column1 = match.Groups[2].Value;
+            String column2 = match.Groups[3].Value;
+
+            ExcelParser.ParsedTable tableObj = null;
+
+            // If this isn't a valid table name, just return the unmodified formula
+            if (!Converter.tableMap.TryGetValue(tableName, out tableObj)) return false;
+
+            ExcelParser.ParsedTableColumn column1Obj = null;
+            ExcelParser.ParsedTableColumn column2Obj = null;
+
+            tableObj.ColumnMap.TryGetValue(column1, out column1Obj);
+            tableObj.ColumnMap.TryGetValue(column2, out column2Obj);
+
+            String constructedRange = "";
+            // If match found for column1 AND column2
+            if (column1Obj != null && column2Obj != null)
+            {
+                // Since there are two columns being referenced, our range is the column 1 start to the column 2 end
+                constructedRange = column1Obj.columnSpan.GetStartCellString() + ":" + column2Obj.columnSpan.GetEndCellString();
+            }
+            else // If match only found for column1
+            {
+                // Since there is only one columns being referenced, our range is the same as column1's span
+                constructedRange = column1Obj.columnSpan.GetRangeString();
+            }
+
+            output = Regex.Replace(formula, externalTableRefRegex.ToString(), constructedRange);
+            return true;
+        }
+
+        // Takes in an internal table reference (ie. a table referring with @ to THIS ROW, THIS COL)
+        // Example input: SUM(Table1[@[Column1]:[Column3]])
+        // If regex match is successful, converts outputs a range like "B4:D4" and returns true
+        public static bool InternalTableRefToRange(String formula, ExcelParser.ParsedCell cell, out String output)
+        {
+            Match match = internalTableRefRegex.Match(formula);
+            output = formula;
+
+            if (!match.Success) return false;
+
+            String tableName = match.Groups[1].Value;
+            String operationAxis = match.Groups[2].Value; 
+            String column1 = match.Groups[3].Value;
+            String column2 = match.Groups[4].Value;
+
+            ExcelParser.ParsedTable tableObj = null;
+
+            // If this isn't a valid table name, just return the unmodified formula
+            if (!Converter.tableMap.TryGetValue(tableName, out tableObj)) return false;
+
+            ExcelParser.ParsedTableColumn column1Obj = null;
+            ExcelParser.ParsedTableColumn column2Obj = null;
+
+            tableObj.ColumnMap.TryGetValue(column1, out column1Obj);
+            tableObj.ColumnMap.TryGetValue(column2, out column2Obj);
+
+            String constructedRange = "";
+            Match cellMatch = currCellRegex.Match(cell.CellId);
+            int currRowNum = int.Parse(cellMatch.Groups[2].Value); // row the current cell is on
+            // If match found for column1 AND column2
+            if (column1Obj != null && column2Obj != null)
+            {
+                // With two columns being referenced, range start is column 1's cell that lies on the current row
+                // by the same reasoning, range end is column 2's cell that lies on the same row
+                String column1SpanStart = column1Obj.columnSpan.startChar + currRowNum.ToString();
+                String column2SpanEnd = column2Obj.columnSpan.endChar + currRowNum.ToString();
+                constructedRange = column1SpanStart + ":" + column2SpanEnd;
+            }
+            else // If match only found for column1
+            {
+                // In this case, we actually only have a singular cell which is column 1's cell that lies on the current row
+                constructedRange = column1Obj.columnSpan.startChar.ToString() + currRowNum;
+            }
+
+            output = Regex.Replace(formula, internalTableRefRegex.ToString(), constructedRange);
+            return true;
+        }
+
+        // Corrects Excel function names to the proper PowerFx equivalent name
+        // Eg. VLOOKUP -> LOOKUP
+        public static String AlignFunctionName(String functionName)
+        { 
+            if (functionName == null) return null;
+
+            // If we have a match (there's a name switch that needs to be made)
+            // Then we return the proper name
+            String output = "";
+            if (functionNameMap.TryGetValue(functionName, out output)) return output;
+
+            return functionName;
+        }
+
+
+        // Takes in a parsed table object and builds an output table
+        // Example output: Table({Column1=B1, Column2=B2, Column3=B3, Column4=B4}, {Column1=C1, Column2=C2, Column3=C3, Column4=C4})
+        public static String BuildTableOutput(ExcelParser.ParsedTable tableInput)
+        {
+            StringBuilder sb = new StringBuilder();
+
+            sb.Append("Table(");
+
+            // Get the starting and ending columns for this table's range
+            Range tableRange = DecomposeRange(tableInput.Range);
+
+            // Iterate to build table output, adding to the output string
+            for (int row = tableRange.startNum + 1; row <= tableRange.endNum; row++)
+            {
+                sb.Append("{");
+
+                for (char col = tableRange.startChar; col <= tableRange.endChar; col++)
+                {
+                    // calculate 1-indexed colNum so we know what is eg. column 1, column 2, column 3
+                    int colNum = col - tableRange.startChar + 1;
+
+                    String varName = GenerateName(tableInput.SheetName, col + row.ToString());
+                    String columnName = "Column" + colNum;
+
+                    if (Converter.definedNamesMap.ContainsKey(varName)) varName = Converter.definedNamesMap[varName];
+
+                    sb.Append(columnName + "=" + varName);
+
+                    // Add comma as separator unless we're at the last column
+                    if (col < tableRange.endChar) sb.Append(", ");
+                }
+
+                sb.Append("}");
+
+                // Add comma as a separator unless we're at the last row
+                if (row < tableRange.endNum)
+                {
+                    sb.Append(", ");
+                }
+            }
+            sb.Append(")");
+
+            return sb.ToString();
+        }
+
+        private static Regex externalTableRefRegex = new Regex(@"(\w+)\[+(\w+)\]:?\[?(\w+)?\]{0,2}(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
+
+        private static Regex internalTableRefRegex = new Regex(@"(\w+)\[+\#(.+)\],\[(\w+)\]:?\[?(\w+)?\]{0,2}");
+
         // regex that detects a A3:C7 style range, ignoring if it is within quotes
         private static Regex colonRangeRegex = new Regex(@"([A-Z]\d+):([A-Z]\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
+
+        private static Regex decomposeColonRangeRegex = new Regex(@"([A-Z])(\d+):([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
 
         private static Regex parsedRangeRegex = new Regex(@"([A-Z])(\d+)_RANGE_([A-Z])(\d+)(?=([^""']*[""'][^""']*[""'])*[^""']*$)");
 
@@ -328,11 +515,17 @@ namespace ExcelConverter
 
         private static Regex definedRangeRegex = new Regex(@"(['']?)([^'']+)(['']?)!\$([A-Z])\$(\d+):\$([A-Z])\$(\d+)");
 
+        private static Dictionary<String, String> functionNameMap = new Dictionary<String, String>()
+            {
+                {"VLOOKUP", "LOOKUP"},
+                {"XLOOKUP", "LOOKUP"}
+            };
+
         private static Dictionary<BinaryOp, String> binaryOpMap = new Dictionary<BinaryOp, String>()
             {
                 {BinaryOp.Or, "||"},
                 {BinaryOp.And, "&&"},
-                {BinaryOp.Concat, "CONCAT"},
+                {BinaryOp.Concat, "&"},
                 {BinaryOp.Add, "+"},
                 {BinaryOp.Mul, "*"},
                 {BinaryOp.Div, "/"},

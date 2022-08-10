@@ -40,7 +40,14 @@ namespace ExcelConverter
         {
             public string Name;
             public string Range;
+            public String SheetName;
             public List<ParsedTableColumn> Columns;
+            public UInt32 HeaderRowCount;
+            public UInt32 TotalsRowCount;
+
+            // ColumnMap is filled out later, by the Excel Converter
+            // Maps column name to the actual column object; used during table reference resolution
+            public Dictionary<String, ParsedTableColumn> ColumnMap;
         }
 
         [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
@@ -48,6 +55,7 @@ namespace ExcelConverter
         {
             public string Name;
             public string Formula;
+            public Range columnSpan = null;
         }
 
         [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]
@@ -106,7 +114,8 @@ namespace ExcelConverter
                         foreach (TableDefinitionPart tablePart in ((WorksheetPart)workSheetPartInfo.OpenXmlPart).TableDefinitionParts)
                         {
                             DocumentFormat.OpenXml.Spreadsheet.Table table = tablePart.Table; // formerly Table table = tablePart.Table  ... idk why that broke suddenly
-                            ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference };
+                            ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference, SheetName = sheet.Name.Value, HeaderRowCount = table.HeaderRowCount ?? 0, TotalsRowCount = table.TotalsRowCount ?? 0};
+                            parsedTable.ColumnMap = new Dictionary<string, ParsedTableColumn>();
                             List<ParsedTableColumn> parsedColumns = new List<ParsedTableColumn>();
 
                             foreach (TableColumn column in table.TableColumns)
