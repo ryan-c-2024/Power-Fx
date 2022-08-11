@@ -173,7 +173,10 @@ namespace ExcelConverter
             isFormula = true;
             hasFuncBeenCalled = true;
             ListNode funcArgs = node.Args;
-            var funcName = node.Head.Name;
+
+            // Swap the function name from Excel func name to PowerFx func name if possible
+            // Eg. VLOOKUP -> LOOKUP
+            String funcName = Utils.AlignFunctionName(node.Head.Name);
 
             // First make the function name the lowercased func name to fit PFX style
             StringBuilder adjustedFuncName = new StringBuilder(Utils.AdjustFuncName(funcName.ToString())); 
@@ -320,7 +323,7 @@ namespace ExcelConverter
 
 
 // Might need to add error handling in case someone passes in wrong kind of Match object?
-public struct Range
+public class Range
 {
     //public Range()
     //{
@@ -330,6 +333,14 @@ public struct Range
     //    startNum = 0;
     //    endNum = 0;
     //}
+
+    public Range(char startChar, int startNum, char endChar, int endNum)
+    {
+        this.startChar = startChar;
+        this.startNum = startNum;
+        this.endChar = endChar;
+        this.endNum = endNum;
+    }
 
     // Initiate range object from total range match object
     // ie. match for A3_RANGE_C9 should be the input here, not any other kind of match
@@ -360,6 +371,29 @@ public struct Range
             startNum = int.Parse(match.Groups[2].Value);
             endNum = int.Parse(match.Groups[4].Value);
         }
+    }
+
+    // Combine the split up member variables into a singular range string
+    // Returns eg. "A4:C9"
+    public String GetRangeString()
+    {
+        String cell1 = startChar + startNum.ToString();
+        String cell2 = endChar + endNum.ToString();
+        return cell1 + ":" + cell2;
+    }
+
+    // Get the starting cell of the range
+    // Eg. for range object representing "A4:C9", return "A4"
+    public String GetStartCellString()
+    {
+        return startChar + startNum.ToString();
+    }
+
+    // Get the ending cell of the range
+    // Eg. for range object representing "A4:C9", return "C9"
+    public String GetEndCellString()
+    {
+        return endChar + endNum.ToString();
     }
 
     public char startChar;

@@ -45,13 +45,16 @@ namespace ExcelConverter
         // eg. MyRange1 -> A3_RANGE_C9
         public static Dictionary<String, String> definedRangesMap = new Dictionary<String, String>();
 
+        // Maps name of table names to table objects
+        public static Dictionary<String, ExcelParser.ParsedTable> tableMap = new Dictionary<String, ExcelParser.ParsedTable>();
+
         public static void Main(string[] args)
         {
             Init();
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
             // Also, sometimes ExcelConverter doesn't run past ParseSpreadsheet for some reason
 
-            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
             ConvertInternal(data);
 
             foreach(ExcelPfxResponse converted in outputList)
@@ -67,7 +70,6 @@ namespace ExcelConverter
             ConvertInternal(data);
             
             return outputList;
-
         }
 
         public static List<ExcelPfxResponse> ConvertCellFormulas(ExcelParser.ParsedExcelData value)
@@ -96,6 +98,7 @@ namespace ExcelConverter
             processedSet = new HashSet<String>();
             definedNamesMap = new Dictionary<String, String>();
             definedRangesMap = new Dictionary<String, String>();
+            tableMap = new Dictionary<String, ExcelParser.ParsedTable>();
         }
 
         private static void ConvertInternal(ExcelParser.ParsedExcelData data)
@@ -121,6 +124,35 @@ namespace ExcelConverter
                 }
             }
 
+            // Iterate through tables, running preprocessing and preliminary conversion work
+            foreach (ExcelParser.ParsedTable p in data.Tables)
+            {
+                // Add table to map so we can get table object from the table name later
+                tableMap.Add(p.Name, p);
+
+                // Get and adjust general table range information
+                Range tableRange = Utils.DecomposeRange(p.Range);
+                int startRowNum = tableRange.startNum + 1; // Correct starting row by 1 to skip over header row
+
+                char columnChar = tableRange.startChar;
+                // Establish and initialize ranges for each column in the table
+                foreach (ExcelParser.ParsedTableColumn c in p.Columns)
+                {
+                    // Define spans (ie. ranges) for each column ... used to resolve table references later
+                    c.ColumnSpan = new Range(columnChar, startRowNum, columnChar, tableRange.endNum);
+                    p.ColumnMap.Add(c.Name, c);
+
+                    // increment column char so we go from eg. B4:B8 -> C4:C8 -> D4:D8 as we're defining ranges for columns
+                    columnChar = (char)(columnChar + 1); 
+                }
+
+                // Build table output and add it to the output list
+                String tableFormula = Utils.BuildTableOutput(p);
+                String tableName = Utils.CreateVariable(p.SheetName, p.Name, tableFormula);//Utils.GenerateName(p.SheetName, p.Name);
+
+                outputList.Add(new ExcelPfxResponse { CellId = p.Range, Formula = tableName }); // add sheet name eg. sheet1_table1
+            }
+
 
             // Iterate through all parsed cells and convert to PFX if applicable            
             foreach (ExcelParser.ParsedCell c in data.Cells)
@@ -133,6 +165,8 @@ namespace ExcelConverter
                 {
                     // If formula has a range, preprocess and reformat it
                     // Otherwise, the engine parser gets tripped up by the range colon
+
+                    c.Formula = Utils.TableToRange(c.Formula, c);
                     c.Formula = Utils.ReformatRange(c.Formula);
                     p = engine.Parse(c.Formula);
                 }
