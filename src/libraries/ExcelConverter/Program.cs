@@ -70,7 +70,7 @@ namespace ExcelConverter
                 foreach (ExcelParser.ParsedTableColumn c in p.Columns)
                 {
                     // Define spans (ie. ranges) for each column ... used to resolve table references later
-                    c.columnSpan = new Range(columnChar, startRowNum, columnChar, tableRange.endNum);
+                    c.ColumnSpan = new Range(columnChar, startRowNum, columnChar, tableRange.endNum);
                     p.ColumnMap.Add(c.Name, c);
 
                     // increment column char so we go from eg. B4:B8 -> C4:C8 -> D4:D8 as we're defining ranges for columns

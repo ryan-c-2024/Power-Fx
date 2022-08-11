@@ -40,7 +40,7 @@ namespace ExcelConverter
         {
             public string Name;
             public string Range;
-            public String SheetName;
+            public string SheetName;
             public List<ParsedTableColumn> Columns;
             public UInt32 HeaderRowCount;
             public UInt32 TotalsRowCount;
@@ -55,7 +55,7 @@ namespace ExcelConverter
         {
             public string Name;
             public string Formula;
-            public Range columnSpan = null;
+            public Range ColumnSpan = null;
         }
 
         [JsonObject(ItemNullValueHandling = NullValueHandling.Ignore)]

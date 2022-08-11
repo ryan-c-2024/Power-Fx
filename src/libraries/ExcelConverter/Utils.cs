@@ -254,7 +254,7 @@ namespace ExcelConverter
             return colonRangeRegex.Replace(input, "$1_RANGE_$2");
         }
 
-        // Takes in a range eg. "A4:C9" and returns its corresponding rang eobject
+        // Takes in a range eg. "A4:C9" and returns its corresponding range object
         public static Range DecomposeRange(String strInput)
         {
             Match match = decomposeColonRangeRegex.Match(strInput);
@@ -378,12 +378,12 @@ namespace ExcelConverter
             if (column1Obj != null && column2Obj != null)
             {
                 // Since there are two columns being referenced, our range is the column 1 start to the column 2 end
-                constructedRange = column1Obj.columnSpan.GetStartCellString() + ":" + column2Obj.columnSpan.GetEndCellString();
+                constructedRange = column1Obj.ColumnSpan.GetStartCellString() + ":" + column2Obj.ColumnSpan.GetEndCellString();
             }
             else // If match only found for column1
             {
                 // Since there is only one columns being referenced, our range is the same as column1's span
-                constructedRange = column1Obj.columnSpan.GetRangeString();
+                constructedRange = column1Obj.ColumnSpan.GetRangeString();
             }
 
             output = Regex.Replace(formula, externalTableRefRegex.ToString(), constructedRange);
@@ -424,14 +424,14 @@ namespace ExcelConverter
             {
                 // With two columns being referenced, range start is column 1's cell that lies on the current row
                 // by the same reasoning, range end is column 2's cell that lies on the same row
-                String column1SpanStart = column1Obj.columnSpan.startChar + currRowNum.ToString();
-                String column2SpanEnd = column2Obj.columnSpan.endChar + currRowNum.ToString();
+                String column1SpanStart = column1Obj.ColumnSpan.startChar + currRowNum.ToString();
+                String column2SpanEnd = column2Obj.ColumnSpan.endChar + currRowNum.ToString();
                 constructedRange = column1SpanStart + ":" + column2SpanEnd;
             }
             else // If match only found for column1
             {
                 // In this case, we actually only have a singular cell which is column 1's cell that lies on the current row
-                constructedRange = column1Obj.columnSpan.startChar.ToString() + currRowNum;
+                constructedRange = column1Obj.ColumnSpan.startChar.ToString() + currRowNum;
             }
 
             output = Regex.Replace(formula, internalTableRefRegex.ToString(), constructedRange);
