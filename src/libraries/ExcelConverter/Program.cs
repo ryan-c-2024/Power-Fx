@@ -34,7 +34,7 @@ namespace ExcelConverter
 
     public class Converter
     {
-        public static List<String> outputList = new List<String>();
+        public static List<ExcelPfxResponse> outputList = new List<ExcelPfxResponse>();
         public static HashSet<String> processedSet = new HashSet<String>();
 
         // Maps generic variable names (String) to the defined name (String)
@@ -54,7 +54,7 @@ namespace ExcelConverter
             // would it be more efficient to run some of the processing AS WE ARE PARSING instead of after we're done?
             // Also, sometimes ExcelConverter doesn't run past ParseSpreadsheet for some reason
 
-            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"SpotifyAnalysis.xlsx"); // parse Excel spreadsheet and extract data
+            ExcelParser.ParsedExcelData data = ExcelParser.ParseSpreadsheet(@"test.xlsx"); // parse Excel spreadsheet and extract data
             ConvertInternal(data);
 
             foreach(ExcelPfxResponse converted in outputList)
@@ -148,8 +148,9 @@ namespace ExcelConverter
 
                 // Build table output and add it to the output list
                 String tableFormula = Utils.BuildTableOutput(p);
-                String tableName = Utils.CreateVariable(p.SheetName, p.Name, tableFormula);
-                outputList.Add(tableName); // add sheet name eg. sheet1_table1
+                String tableName = Utils.CreateVariable(p.SheetName, p.Name, tableFormula);//Utils.GenerateName(p.SheetName, p.Name);
+
+                outputList.Add(new ExcelPfxResponse { CellId = p.Range, Formula = tableName }); // add sheet name eg. sheet1_table1
             }
 
 

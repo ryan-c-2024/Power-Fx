@@ -133,6 +133,9 @@ namespace ExcelConverter
                     DocumentFormat.OpenXml.Spreadsheet.Table table = tablePart.Table; // formerly Table table = tablePart.Table  ... idk why that broke suddenly
                     ParsedTable parsedTable = new ParsedTable { Name = table.Name, Range = table.Reference };
                     List<ParsedTableColumn> parsedColumns = new List<ParsedTableColumn>();
+                    parsedTable.ColumnMap = new Dictionary<string, ParsedTableColumn>();
+                    parsedTable.SheetName = sheet.Name;
+
 
                     foreach (TableColumn column in table.TableColumns)
                     {
