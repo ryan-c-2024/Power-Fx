@@ -24,5 +24,6 @@
     <Title>Microsoft PowerFx Transport Attributes</Title>
     <Description>This provides attributes used by Microsoft.PowerFx.Core</Description>
     <Summary>This provides attributes used by Microsoft.PowerFx.Core</Summary>
+    <GeneratePackageOnBuild>True</GeneratePackageOnBuild>
 	</PropertyGroup>
 </Project>

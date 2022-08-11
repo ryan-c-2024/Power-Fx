@@ -325,14 +325,14 @@ namespace ExcelConverter
 // Might need to add error handling in case someone passes in wrong kind of Match object?
 public class Range
 {
-    public Range()
-    {
-        // assign placeholder values in generic constructor
-        startChar = 'a';
-        endChar = 'a';
-        startNum = 0;
-        endNum = 0;
-    }
+    //public Range()
+    //{
+    //    // assign placeholder values in generic constructor
+    //    startChar = 'a';
+    //    endChar = 'a';
+    //    startNum = 0;
+    //    endNum = 0;
+    //}
 
     public Range(char startChar, int startNum, char endChar, int endNum)
     {

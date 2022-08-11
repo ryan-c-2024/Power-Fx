@@ -158,7 +158,7 @@ namespace ExcelConverter
 
                     int currIteration = (i - rg.startChar) * (rg.endNum - rg.startNum + 1) + (j - rg.startNum + 1);
                     String newCellFormula = interpolatedList[currIteration - 1]; // index out of range
-                    Converter.outputList.Add(Utils.CreateVariable(currCell.SheetName, currCellId, newCellFormula));
+                    Converter.outputList.Add( new ExcelPfxResponse { CellId = currCellId, Formula = Utils.CreateVariable(currCell.SheetName, currCellId, newCellFormula) });
                     Converter.processedSet.Add(currCellId);
 
                     l++;
